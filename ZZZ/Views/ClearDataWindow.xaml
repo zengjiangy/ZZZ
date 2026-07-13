@@ -1,0 +1,12 @@
+<Window x:Class="ZZZ.Views.ClearDataWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource ClearDataTitle}" Height="330" Width="410" ResizeMode="NoResize" WindowStartupLocation="CenterOwner">
+    <Grid Margin="22"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="{DynamicResource ChooseClear}" FontSize="19" FontWeight="SemiBold" Margin="0,0,0,10"/>
+            <CheckBox Content="{DynamicResource History}" IsChecked="{Binding History}"/><CheckBox Content="{DynamicResource Cache}" IsChecked="{Binding Cache}"/>
+            <CheckBox Content="{DynamicResource Cookies}" IsChecked="{Binding Cookies}"/><CheckBox Content="{DynamicResource SavedPasswords}" IsChecked="{Binding Passwords}"/>
+            <CheckBox Content="{DynamicResource AutofillData}" IsChecked="{Binding FormData}"/>
+        </StackPanel>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="{DynamicResource Cancel}" Click="Cancel_Click" Margin="0,0,8,0"/><Button Content="{DynamicResource ClearNow}" Click="Clear_Click" Style="{StaticResource PrimaryButton}"/></StackPanel>
+    </Grid>
+</Window>

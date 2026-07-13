@@ -1,0 +1,53 @@
+using System.Collections.ObjectModel;
+using ZZZ.ViewModels;
+
+namespace ZZZ.Services;
+
+public interface ITabService
+{
+    ObservableCollection<BrowserTabViewModel> Items { get; }
+    BrowserTabViewModel Create(string url, bool isPrivate = false);
+    int Close(BrowserTabViewModel tab);
+    void CloseOthers(BrowserTabViewModel tab);
+    void CloseToRight(BrowserTabViewModel tab);
+}
+
+public sealed class TabService(AppServices services) : ITabService
+{
+    public ObservableCollection<BrowserTabViewModel> Items { get; } = [];
+    public BrowserTabViewModel Create(string url, bool isPrivate = false)
+    {
+        var tab = new BrowserTabViewModel(services, url, isPrivate);
+        Items.Add(tab);
+        return tab;
+    }
+    public int Close(BrowserTabViewModel tab)
+    {
+        var index = Items.IndexOf(tab);
+        services.Browser.Close(tab);
+        Items.Remove(tab);
+        return index;
+    }
+    public void CloseOthers(BrowserTabViewModel tab)
+    {
+        foreach (var other in Items.Where(x => x != tab).ToArray()) Close(other);
+    }
+    public void CloseToRight(BrowserTabViewModel tab)
+    {
+        var index = Items.IndexOf(tab);
+        foreach (var other in Items.Skip(index + 1).ToArray()) Close(other);
+    }
+}
+
+public interface IMouseGestureService
+{
+    bool IsEnabled { get; }
+    void Attach(System.Windows.IInputElement surface);
+}
+
+// Reserved extension point: the default implementation is deliberately inert.
+public sealed class NullMouseGestureService : IMouseGestureService
+{
+    public bool IsEnabled => false;
+    public void Attach(System.Windows.IInputElement surface) { }
+}

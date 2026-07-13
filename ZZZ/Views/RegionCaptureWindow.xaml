@@ -1,0 +1,14 @@
+<Window x:Class="ZZZ.Views.RegionCaptureWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource RegionCapture}" WindowStyle="None" ResizeMode="NoResize" WindowStartupLocation="CenterOwner" Background="#FF08090B" Topmost="True" KeyDown="Window_KeyDown">
+    <Grid>
+        <Image x:Name="Preview" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+        <Canvas x:Name="Overlay" Background="#01000000" Cursor="Cross" MouseLeftButtonDown="Overlay_MouseLeftButtonDown" MouseMove="Overlay_MouseMove" MouseLeftButtonUp="Overlay_MouseLeftButtonUp">
+            <Border x:Name="Selection" Visibility="Collapsed" BorderBrush="#FF9D8CFF" BorderThickness="2" Background="#18FFFFFF" CornerRadius="2">
+                <Border.Effect><DropShadowEffect Color="#FF6557C8" BlurRadius="8" Opacity="0.8"/></Border.Effect>
+            </Border>
+            <Border Canvas.Top="16" Background="#DD16171B" CornerRadius="10" Padding="14,8" Loaded="Hint_Loaded">
+                <StackPanel Orientation="Horizontal"><Path Width="15" Height="15" Margin="0,0,8,0" Stroke="White" StrokeThickness="1.6" Data="M2,4 L2,2 L6,2 M12,2 L16,2 L16,6 M16,12 L16,16 L12,16 M6,16 L2,16 L2,12"/><TextBlock Text="{DynamicResource CaptureHint}" Foreground="White" FontSize="13"/></StackPanel>
+            </Border>
+        </Canvas>
+    </Grid>
+</Window>

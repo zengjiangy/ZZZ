@@ -1,0 +1,12 @@
+.vs/
+.idea/
+**/bin/
+**/obj/
+work/
+outputs/
+*.user
+*.suo
+*.cache
+*.log
+TestResults/
+artifacts/
