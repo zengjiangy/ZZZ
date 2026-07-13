@@ -3,8 +3,19 @@ using System.Windows;
 
 namespace ZZZ.Services;
 
-public sealed record LanguageOption(string Code, string DisplayName);
-public sealed record SettingChoice<T>(T Value, string Label) where T : struct, Enum;
+public sealed class LanguageOption
+{
+    public LanguageOption(string code, string displayName) { Code = code; DisplayName = displayName; }
+    public string Code { get; }
+    public string DisplayName { get; }
+}
+
+public sealed class SettingChoice<T> where T : struct, Enum
+{
+    public SettingChoice(T value, string label) { Value = value; Label = label; }
+    public T Value { get; }
+    public string Label { get; }
+}
 
 public static class LocalizationService
 {
@@ -24,7 +35,7 @@ public static class LocalizationService
     {
         var language = Resolve(requestedLanguage);
         var dictionaries = Application.Current.Resources.MergedDictionaries;
-        foreach (var existing in dictionaries.Where(x => x.Source?.OriginalString.Contains(ResourceMarker, StringComparison.OrdinalIgnoreCase) == true).ToArray())
+        foreach (var existing in dictionaries.Where(x => x.Source?.OriginalString.IndexOf(ResourceMarker, StringComparison.OrdinalIgnoreCase) >= 0).ToArray())
             dictionaries.Remove(existing);
 
         dictionaries.Add(Load("en-US"));

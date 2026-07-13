@@ -225,8 +225,11 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
 
     private async Task RegisterDarkModeAsync(CoreWebView2 core)
     {
-        if (_darkScriptIds.Remove(core, out var oldId))
+        if (_darkScriptIds.TryGetValue(core, out var oldId))
+        {
+            _darkScriptIds.Remove(core);
             try { core.RemoveScriptToExecuteOnDocumentCreated(oldId); } catch { }
+        }
         var mode = ThemeService.EffectiveWebDarkMode(_settings.Current);
         await WebDarkModeService.ApplyNativeModeAsync(core, mode);
         var script = WebDarkModeService.ScriptFor(mode);

@@ -58,10 +58,10 @@ public partial class RegionCaptureWindow : Window
     {
         var image = ImageBounds();
         var scale = image.Width / _source.PixelWidth;
-        var x = Math.Clamp((int)Math.Round((selection.Left - image.Left) / scale), 0, _source.PixelWidth - 1);
-        var y = Math.Clamp((int)Math.Round((selection.Top - image.Top) / scale), 0, _source.PixelHeight - 1);
-        var width = Math.Clamp((int)Math.Round(selection.Width / scale), 1, _source.PixelWidth - x);
-        var height = Math.Clamp((int)Math.Round(selection.Height / scale), 1, _source.PixelHeight - y);
+        var x = Clamp((int)Math.Round((selection.Left - image.Left) / scale), 0, _source.PixelWidth - 1);
+        var y = Clamp((int)Math.Round((selection.Top - image.Top) / scale), 0, _source.PixelHeight - 1);
+        var width = Clamp((int)Math.Round(selection.Width / scale), 1, _source.PixelWidth - x);
+        var height = Clamp((int)Math.Round(selection.Height / scale), 1, _source.PixelHeight - y);
         var cropped = new CroppedBitmap(_source, new Int32Rect(x, y, width, height));
         cropped.Freeze();
 
@@ -89,8 +89,11 @@ public partial class RegionCaptureWindow : Window
     private Point ClampToImage(Point point)
     {
         var bounds = ImageBounds();
-        return new Point(Math.Clamp(point.X, bounds.Left, bounds.Right), Math.Clamp(point.Y, bounds.Top, bounds.Bottom));
+        return new Point(Clamp(point.X, bounds.Left, bounds.Right), Clamp(point.Y, bounds.Top, bounds.Bottom));
     }
+
+    private static int Clamp(int value, int minimum, int maximum) => Math.Min(Math.Max(value, minimum), maximum);
+    private static double Clamp(double value, double minimum, double maximum) => Math.Min(Math.Max(value, minimum), maximum);
 
     private void Window_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Escape) DialogResult = false; }
     private void Hint_Loaded(object sender, RoutedEventArgs e)

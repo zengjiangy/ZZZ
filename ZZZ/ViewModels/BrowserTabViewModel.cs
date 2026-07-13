@@ -80,13 +80,13 @@ public partial class BrowserTabViewModel : ObservableObject
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)) return "Web";
         if (uri.IsFile) return "Local";
         var host = uri.Host.ToLowerInvariant();
-        if (host.StartsWith("www.")) host = host[4..];
+        if (host.StartsWith("www.")) host = host.Substring(4);
         if (host == "google.com" || host.EndsWith(".google.com")) return "Google";
         if (host == "bing.com" || host.EndsWith(".bing.com")) return "Bing";
         if (host == "baidu.com" || host.EndsWith(".baidu.com")) return "Baidu";
         if (host == "duckduckgo.com" || host.EndsWith(".duckduckgo.com")) return "DuckDuckGo";
         if (host.Length <= 22) return host;
-        return host[..19] + "…";
+        return host.Substring(0, 19) + "…";
     }
 
     public async Task<byte[]?> CaptureVisiblePageAsync()

@@ -10,3 +10,4 @@ outputs/
 *.log
 TestResults/
 artifacts/
+**/FodyWeavers.xsd

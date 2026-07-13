@@ -11,6 +11,7 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        NativeDependencyService.PrepareWebView2Loader();
         EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler(Window_Loaded));
         Services = new AppServices();
         await Services.InitializeAsync();

@@ -32,7 +32,7 @@ internal static class JsonFiles
         try
         {
             if (!File.Exists(path)) return fallback();
-            await using var stream = File.OpenRead(path);
+            using var stream = File.OpenRead(path);
             return await JsonSerializer.DeserializeAsync<T>(stream, Options) ?? fallback();
         }
         catch { return fallback(); }
@@ -42,9 +42,10 @@ internal static class JsonFiles
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + ".tmp";
-        await using (var stream = File.Create(temp))
+        using (var stream = File.Create(temp))
             await JsonSerializer.SerializeAsync(stream, value, Options);
-        File.Move(temp, path, true);
+        if (File.Exists(path)) File.Delete(path);
+        File.Move(temp, path);
     }
 }
 
@@ -136,11 +137,12 @@ public sealed class BookmarkService : IBookmarkService
         foreach (var item in _items)
             html.Append("<DT><A HREF=\"").Append(WebUtility.HtmlEncode(item.Url)).Append("\">").Append(WebUtility.HtmlEncode(item.Title)).Append("</A>\n");
         html.Append("</DL><p>\n");
-        await File.WriteAllTextAsync(path, html.ToString(), Encoding.UTF8);
+        File.WriteAllText(path, html.ToString(), Encoding.UTF8);
+        await Task.CompletedTask;
     }
     public async Task ImportHtmlAsync(string path)
     {
-        var html = await File.ReadAllTextAsync(path);
+        var html = File.ReadAllText(path);
         var changed = false;
         foreach (Match match in Regex.Matches(html, "<A\\s+[^>]*HREF=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*>(?<title>.*?)</A>", RegexOptions.IgnoreCase | RegexOptions.Singleline))
         {
@@ -223,15 +225,16 @@ public sealed class AdBlockService : IAdBlockService
     public async Task LoadAsync()
     {
         Directory.CreateDirectory(AppPaths.Root);
-        if (!File.Exists(AppPaths.BlockingRules)) await File.WriteAllLinesAsync(AppPaths.BlockingRules, Defaults);
-        _rules = (await File.ReadAllLinesAsync(AppPaths.BlockingRules)).Select(x => x.Trim()).Where(x => x.Length > 0 && !x.StartsWith('!') && !x.StartsWith('#')).ToArray();
+        if (!File.Exists(AppPaths.BlockingRules)) File.WriteAllLines(AppPaths.BlockingRules, Defaults);
+        _rules = File.ReadAllLines(AppPaths.BlockingRules).Select(x => x.Trim()).Where(x => x.Length > 0 && !x.StartsWith("!", StringComparison.Ordinal) && !x.StartsWith("#", StringComparison.Ordinal)).ToArray();
+        await Task.CompletedTask;
     }
     public bool ShouldBlock(string url)
     {
         foreach (var rule in _rules)
         {
             if (rule.Contains('*') && Regex.IsMatch(url, Regex.Escape(rule).Replace("\\*", ".*"), RegexOptions.IgnoreCase)) return true;
-            if (!rule.Contains('*') && url.Contains(rule, StringComparison.OrdinalIgnoreCase)) return true;
+            if (!rule.Contains('*') && url.IndexOf(rule, StringComparison.OrdinalIgnoreCase) >= 0) return true;
         }
         return false;
     }

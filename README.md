@@ -1,6 +1,10 @@
 # ZZZ Browser
 
-ZZZ is a compact, open-source Windows browser built with .NET 8, WPF, MVVM, and Microsoft WebView2. It stores configuration and library data as readable JSON under `%LOCALAPPDATA%\ZZZ` and uses the installed WebView2 runtime instead of bundling Chromium.
+ZZZ is a compact, open-source Windows browser built with .NET Framework 4.8, WPF, MVVM, and Microsoft WebView2. It stores configuration and library data as readable JSON under `%LOCALAPPDATA%\ZZZ` and uses the installed WebView2 runtime instead of bundling Chromium.
+
+## Download
+
+Download the current standalone executable from [GitHub Releases](https://github.com/zengjiangy/ZZZ/releases/latest/download/ZZZ.exe). No .NET 8 Desktop Runtime is required. Windows must provide .NET Framework 4.8 and the Microsoft Edge WebView2 Evergreen Runtime.
 
 ## Included
 
@@ -40,10 +44,9 @@ Create one from the main menu or press `Ctrl+Shift+N`. Each private tab uses its
 
 ```powershell
 dotnet build ZZZ.sln -c Release
-dotnet publish ZZZ\ZZZ.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
 ```
 
-WebView2 Evergreen Runtime is required and is normally already present on supported Windows systems.
+The standalone output is `ZZZ\bin\Release\net48\ZZZ.exe`. Managed dependencies and the x86/x64 WebView2 native loaders are embedded into this file. The `Microsoft.NETFramework.ReferenceAssemblies.net48` package is build-only and is not shipped to users.
 
 ## License
 
