@@ -69,7 +69,7 @@ public partial class MainWindow : Window
         else if (ctrl && shift && e.Key == Key.T) { ViewModel.CreateTab(ViewModel.Services.History.Items.FirstOrDefault()?.Url ?? ViewModel.Services.Settings.Current.HomePage); e.Handled = true; }
         else if (ctrl && e.Key == Key.T) { ViewModel.CreateTab(ViewModel.Services.Settings.Current.HomePage); e.Handled = true; }
         else if (ctrl && e.Key == Key.W && ViewModel.SelectedTab is not null) { ViewModel.CloseTabCommand.Execute(ViewModel.SelectedTab); e.Handled = true; }
-        else if (ctrl && e.Key == Key.L) { AddressBox.Focus(); AddressBox.SelectAll(); e.Handled = true; }
+        else if ((ctrl && e.Key == Key.L) || (alt && e.Key == Key.D)) { AddressBox.Focus(); AddressBox.SelectAll(); e.Handled = true; }
         else if (ctrl && e.Key == Key.R) { ViewModel.SelectedTab?.ReloadCommand.Execute(null); e.Handled = true; }
         else if (ctrl && shift && e.Key == Key.S) { _ = CaptureRegionAsync(); e.Handled = true; }
         else if (alt && e.Key == Key.Left) { ViewModel.SelectedTab?.BackCommand.Execute(null); e.Handled = true; }

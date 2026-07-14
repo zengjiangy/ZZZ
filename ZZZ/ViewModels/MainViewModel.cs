@@ -16,12 +16,13 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool isCurrentPageBookmarked;
     public AppServices Services => _services;
 
-    public MainViewModel(AppServices services)
+    public MainViewModel(AppServices services, IEnumerable<string>? launchUrls = null)
     {
         _services = services;
         _services.Bookmarks.Changed += (_, _) => UpdateBookmarkState();
         _services.Browser.NewTabRequested += (url, isPrivate) => CreateTab(url, isPrivate);
-        var startupUrls = _services.Settings.Current.Browser.RestoreLastSession ? _services.Session.Urls : [];
+        var suppliedUrls = launchUrls?.Where(x => Uri.TryCreate(x, UriKind.Absolute, out _)).ToArray() ?? [];
+        var startupUrls = suppliedUrls.Length > 0 ? suppliedUrls : (_services.Settings.Current.Browser.RestoreLastSession ? _services.Session.Urls : []);
         foreach (var url in startupUrls) CreateTab(url);
         if (Tabs.Count == 0) CreateTab(_services.Settings.Current.HomePage);
         _sleepTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
@@ -37,6 +38,7 @@ public partial class MainViewModel : ObservableObject
             newValue.PropertyChanged += SelectedTab_PropertyChanged;
             newValue.Activate();
         }
+        _services.Browser.SetActive(newValue);
         UpdateBookmarkState();
     }
 

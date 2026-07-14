@@ -5,6 +5,7 @@ using Microsoft.Web.WebView2.Wpf;
 using Microsoft.Web.WebView2.Core;
 using ZZZ.Models;
 using ZZZ.Services;
+using ZZZ.Configuration;
 
 namespace ZZZ.ViewModels;
 
@@ -46,6 +47,19 @@ public partial class BrowserTabViewModel : ObservableObject
     public void Detach() => _view = null;
     public void Activate() => LastActiveUtc = DateTime.UtcNow;
 
+    public void BeginNavigation(string target)
+    {
+        IsLoading = true;
+        Address = target;
+        Url = target;
+        Status = string.Empty;
+        App.Current.Dispatcher.Invoke(() =>
+        {
+            MediaResources.Clear();
+            OnPropertyChanged(nameof(HasMedia));
+        });
+    }
+
     public void NavigateAddress()
     {
         var input = Address.Trim();
@@ -63,12 +77,25 @@ public partial class BrowserTabViewModel : ObservableObject
         return engine.UrlTemplate.Replace("{query}", Uri.EscapeDataString(input));
     }
 
-    public void AddMedia(string url, string kind)
+    public void AddMedia(string url, string kind, string mimeType = "", long? contentLength = null)
     {
-        if (MediaResources.Any(x => x.Url == url)) return;
         App.Current.Dispatcher.Invoke(() =>
         {
-            MediaResources.Add(new MediaResource { Url = url, Kind = kind });
+            var existing = MediaResources.FirstOrDefault(x => x.Url == url);
+            if (existing is not null)
+            {
+                var index = MediaResources.IndexOf(existing);
+                MediaResources[index] = new MediaResource
+                {
+                    Url = url,
+                    Kind = string.IsNullOrWhiteSpace(kind) ? existing.Kind : kind,
+                    MimeType = string.IsNullOrWhiteSpace(mimeType) ? existing.MimeType : mimeType,
+                    ContentLength = contentLength ?? existing.ContentLength
+                };
+                return;
+            }
+            if (MediaResources.Count >= 300) MediaResources.RemoveAt(0);
+            MediaResources.Add(new MediaResource { Url = url, Kind = kind, MimeType = mimeType, ContentLength = contentLength });
             OnPropertyChanged(nameof(HasMedia));
         });
     }
@@ -112,6 +139,18 @@ public partial class BrowserTabViewModel : ObservableObject
     [RelayCommand] private void Home()
     {
         Address = _services.Settings.Current.HomePage;
+        NavigateAddress();
+    }
+    [RelayCommand] private void Translate()
+    {
+        if (!Uri.TryCreate(Url, UriKind.Absolute, out var source) || (source.Scheme != Uri.UriSchemeHttp && source.Scheme != Uri.UriSchemeHttps)) return;
+        var browser = _services.Settings.Current.Browser;
+        var targetLanguage = string.IsNullOrWhiteSpace(browser.TranslationTargetLanguage) ? "zh-CN" : browser.TranslationTargetLanguage.Trim();
+        var microsoftLanguage = targetLanguage.Equals("zh-CN", StringComparison.OrdinalIgnoreCase) ? "zh-Hans"
+            : targetLanguage.Equals("zh-TW", StringComparison.OrdinalIgnoreCase) ? "zh-Hant" : targetLanguage;
+        Address = browser.TranslationProvider == TranslationProvider.Microsoft
+            ? $"https://www.translatetheweb.com/?from=&to={Uri.EscapeDataString(microsoftLanguage)}&a={Uri.EscapeDataString(source.AbsoluteUri)}"
+            : $"https://translate.google.com/translate?sl=auto&tl={Uri.EscapeDataString(targetLanguage)}&u={Uri.EscapeDataString(source.AbsoluteUri)}";
         NavigateAddress();
     }
     [RelayCommand] private void OpenDevTools() { if (_services.Settings.Current.Advanced.EnableDeveloperTools) _view?.CoreWebView2?.OpenDevToolsWindow(); }

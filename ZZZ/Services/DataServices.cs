@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -18,9 +19,11 @@ public static class AppPaths
     public static string Bookmarks => Path.Combine(Root, "bookmarks.json");
     public static string History => Path.Combine(Root, "history.json");
     public static string Scripts => Path.Combine(Root, "userscripts.json");
+    public static string UserScriptValues => Path.Combine(Root, "userscript-values.json");
     public static string BlockingRules => Path.Combine(Root, "blocking-rules.txt");
     public static string Session => Path.Combine(Root, "session.json");
     public static string WebViewData => Path.Combine(Root, "WebView2");
+    public static string PrivateWebViewRoot => Path.Combine(Path.GetTempPath(), "ZZZ", "Private");
 }
 
 internal static class JsonFiles
@@ -197,17 +200,165 @@ public interface IUserScriptService
     IReadOnlyList<UserScript> Items { get; }
     Task LoadAsync();
     Task SaveAsync(IEnumerable<UserScript> items);
+    Task<UserScript> ImportAsync(string pathOrUrl);
+    UserScript Parse(string source, string sourceUrl = "");
     IEnumerable<UserScript> Matching(string url);
 }
 
 public sealed class UserScriptService : IUserScriptService
 {
     private List<UserScript> _items = [];
+    private static readonly HttpClient Client = CreateClient();
+    private static readonly Regex MetadataLine = new(@"^\s*//\s*@(?<key>[\w-]+)\s*(?<value>.*)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     public IReadOnlyList<UserScript> Items => _items;
-    public async Task LoadAsync() => _items = await JsonFiles.LoadAsync(AppPaths.Scripts, () => new List<UserScript>());
-    public async Task SaveAsync(IEnumerable<UserScript> items) { _items = items.ToList(); await JsonFiles.SaveAsync(AppPaths.Scripts, _items); }
-    public IEnumerable<UserScript> Matching(string url) => _items.Where(x => x.Enabled && (x.Match == "*" || Wildcard(x.Match, url)));
-    private static bool Wildcard(string pattern, string value) => Regex.IsMatch(value, "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$", RegexOptions.IgnoreCase);
+    public async Task LoadAsync()
+    {
+        _items = await JsonFiles.LoadAsync(AppPaths.Scripts, () => new List<UserScript>());
+        foreach (var script in _items) Normalize(script);
+    }
+
+    public async Task SaveAsync(IEnumerable<UserScript> items)
+    {
+        _items = [];
+        foreach (var item in items)
+        {
+            Normalize(item);
+            var script = item;
+            if (item.Code.IndexOf("==UserScript==", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                var parsed = Parse(item.Code, item.SourceUrl);
+                parsed.Id = item.Id;
+                parsed.Enabled = item.Enabled;
+                if (parsed.Requires.SequenceEqual(item.Requires, StringComparer.OrdinalIgnoreCase)) parsed.RequiredCode = item.RequiredCode;
+                script = parsed;
+            }
+            Normalize(script);
+            if (script.Requires.Count > 0 && string.IsNullOrWhiteSpace(script.RequiredCode)) await DownloadRequiresAsync(script);
+            _items.Add(script);
+        }
+        await JsonFiles.SaveAsync(AppPaths.Scripts, _items);
+    }
+
+    public async Task<UserScript> ImportAsync(string pathOrUrl)
+    {
+        string source;
+        string origin;
+        if (Uri.TryCreate(pathOrUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            source = await Client.GetStringAsync(uri);
+            origin = uri.AbsoluteUri;
+        }
+        else
+        {
+            source = File.ReadAllText(pathOrUrl, Encoding.UTF8);
+            origin = new Uri(Path.GetFullPath(pathOrUrl)).AbsoluteUri;
+        }
+
+        if (source.Length > 4 * 1024 * 1024) throw new InvalidDataException("Userscript is larger than 4 MB.");
+        var script = Parse(source, origin);
+        if (script.Requires.Count > 0) await DownloadRequiresAsync(script);
+
+        var existing = _items.FirstOrDefault(x => !string.IsNullOrWhiteSpace(script.Namespace) && x.Namespace == script.Namespace && x.Name == script.Name);
+        if (existing is not null) _items[_items.IndexOf(existing)] = script; else _items.Add(script);
+        await JsonFiles.SaveAsync(AppPaths.Scripts, _items);
+        return script;
+    }
+
+    public UserScript Parse(string source, string sourceUrl = "")
+    {
+        var script = new UserScript { Code = source, SourceUrl = sourceUrl };
+        var start = source.IndexOf("==UserScript==", StringComparison.OrdinalIgnoreCase);
+        var end = source.IndexOf("==/UserScript==", StringComparison.OrdinalIgnoreCase);
+        if (start < 0 || end <= start) return script;
+
+        using var reader = new StringReader(source.Substring(start, end - start));
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
+        {
+            var match = MetadataLine.Match(line);
+            if (!match.Success) continue;
+            var key = match.Groups["key"].Value.ToLowerInvariant();
+            var value = match.Groups["value"].Value.Trim();
+            switch (key)
+            {
+                case "name": if (value.Length > 0) script.Name = value; break;
+                case "namespace": script.Namespace = value; break;
+                case "version": script.Version = value; break;
+                case "description": script.Description = value; break;
+                case "match": if (value.Length > 0) script.Matches.Add(value); break;
+                case "include": if (value.Length > 0) script.Includes.Add(value); break;
+                case "exclude": if (value.Length > 0) script.Excludes.Add(value); break;
+                case "require": if (value.Length > 0) script.Requires.Add(value); break;
+                case "grant": if (value.Length > 0) script.Grants.Add(value); break;
+                case "run-at": if (value.Length > 0) script.RunAt = value; break;
+                case "noframes": script.NoFrames = true; break;
+                case "resource":
+                    var split = value.IndexOfAny(new[] { ' ', '\t' });
+                    if (split > 0) script.Resources[value.Substring(0, split)] = value.Substring(split).Trim();
+                    break;
+            }
+        }
+        script.Match = script.Matches.FirstOrDefault() ?? script.Includes.FirstOrDefault() ?? "*";
+        Normalize(script);
+        return script;
+    }
+
+    public IEnumerable<UserScript> Matching(string url) => _items.Where(x => x.Enabled && UserScriptMatcher.IsMatch(x, url));
+
+    private static void Normalize(UserScript script)
+    {
+        if (string.IsNullOrWhiteSpace(script.Id)) script.Id = Guid.NewGuid().ToString("N");
+        script.Matches ??= [];
+        script.Includes ??= [];
+        script.Excludes ??= [];
+        script.Requires ??= [];
+        script.Grants ??= [];
+        script.Resources ??= [];
+        if (string.IsNullOrWhiteSpace(script.Match)) script.Match = "*";
+        if (string.IsNullOrWhiteSpace(script.RunAt)) script.RunAt = "document-idle";
+    }
+
+    private static async Task DownloadRequiresAsync(UserScript script)
+    {
+        var required = new StringBuilder();
+        foreach (var require in script.Requires.Take(16))
+        {
+            if (!Uri.TryCreate(require, UriKind.Absolute, out var requireUri) || (requireUri.Scheme != Uri.UriSchemeHttp && requireUri.Scheme != Uri.UriSchemeHttps)) continue;
+            var code = await Client.GetStringAsync(requireUri);
+            if (required.Length + code.Length > 4 * 1024 * 1024) throw new InvalidDataException("Combined @require content is larger than 4 MB.");
+            required.AppendLine(code).AppendLine($"//# sourceURL={requireUri.AbsoluteUri}");
+        }
+        script.RequiredCode = required.ToString();
+    }
+
+    private static HttpClient CreateClient()
+    {
+        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/1.1");
+        return client;
+    }
+}
+
+public static class UserScriptMatcher
+{
+    public static bool IsMatch(UserScript script, string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeFile)) return false;
+        var includes = script.Matches.Concat(script.Includes).ToArray();
+        if (includes.Length == 0) includes = new[] { script.Match };
+        return includes.Any(x => MatchPattern(x, url)) && !script.Excludes.Any(x => MatchPattern(x, url));
+    }
+
+    public static bool MatchPattern(string pattern, string url)
+    {
+        if (string.IsNullOrWhiteSpace(pattern) || pattern == "*" || pattern.Equals("<all_urls>", StringComparison.OrdinalIgnoreCase)) return true;
+        var regex = "^" + Regex.Escape(pattern)
+            .Replace(@"\*://", @"https?://")
+            .Replace(@"\*\.", @"(?:[^/]+\.)?")
+            .Replace(@"\*", ".*") + "$";
+        try { return Regex.IsMatch(url, regex, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant); }
+        catch { return false; }
+    }
 }
 
 public interface IAdBlockService

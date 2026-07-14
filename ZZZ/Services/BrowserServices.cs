@@ -73,12 +73,14 @@ public interface IBrowserLifecycleService : IDisposable
     event Action<string, bool>? NewTabRequested;
     Task InitializeAsync(WebView2 view, BrowserTabViewModel tab);
     Task ApplyCurrentSettingsAsync(bool reloadPages);
+    void SetActive(BrowserTabViewModel? activeTab);
     void Sleep(BrowserTabViewModel tab);
     void Close(BrowserTabViewModel tab);
 }
 
 public sealed class BrowserLifecycleService : IBrowserLifecycleService
 {
+    private const string ChromeDesktopUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
     private readonly ISettingsService _settings;
     private readonly IAdBlockService _adBlock;
     private readonly IUserScriptService _scripts;
@@ -87,31 +89,39 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private readonly IPrivacyService _privacy;
     private readonly Dictionary<BrowserTabViewModel, WeakReference<WebView2>> _views = [];
     private readonly Dictionary<CoreWebView2, string> _darkScriptIds = [];
-    private CoreWebView2Environment? _environment;
+    private readonly Dictionary<CoreWebView2, string> _userScriptIds = [];
+    private readonly Dictionary<CoreWebView2, UserScriptBridge> _scriptBridges = [];
+    private readonly Dictionary<BrowserTabViewModel, CoreWebView2Environment> _tabEnvironments = [];
+    private readonly object _environmentGate = new();
+    private readonly string _privateDataPath = Path.Combine(AppPaths.PrivateWebViewRoot, Guid.NewGuid().ToString("N"));
+    private Task<CoreWebView2Environment>? _environmentTask;
+    private Task<CoreWebView2Environment>? _privateEnvironmentTask;
     public event Action<string, bool>? NewTabRequested;
 
     public BrowserLifecycleService(ISettingsService settings, IAdBlockService adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy)
     {
         _settings = settings; _adBlock = adBlock; _scripts = scripts; _history = history; _downloads = downloads; _privacy = privacy;
+        CleanupStalePrivateData();
     }
 
     public async Task InitializeAsync(WebView2 view, BrowserTabViewModel tab)
     {
         if (view.CoreWebView2 is not null) { tab.Attach(view); return; }
-        _environment ??= await CoreWebView2Environment.CreateAsync(null, AppPaths.WebViewData, new CoreWebView2EnvironmentOptions { Language = LocalizationService.CurrentLanguage });
+        var environment = await GetEnvironmentAsync(tab.IsPrivate && _settings.Current.Privacy.StrictPrivateTabs);
         if (tab.IsPrivate)
         {
-            var options = _environment.CreateCoreWebView2ControllerOptions();
+            var options = environment.CreateCoreWebView2ControllerOptions();
             options.ProfileName = $"Private_{tab.Id}";
             options.IsInPrivateModeEnabled = true;
-            await view.EnsureCoreWebView2Async(_environment, options);
+            await view.EnsureCoreWebView2Async(environment, options);
         }
         else
         {
-            await view.EnsureCoreWebView2Async(_environment);
+            await view.EnsureCoreWebView2Async(environment);
         }
         var core = view.CoreWebView2!;
         _views[tab] = new WeakReference<WebView2>(view);
+        _tabEnvironments[tab] = environment;
         tab.Attach(view);
         await ConfigureAsync(core, tab);
         if (!string.IsNullOrWhiteSpace(tab.Url)) view.Source = new Uri(tab.Url);
@@ -124,20 +134,41 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         core.Settings.AreDefaultContextMenusEnabled = true;
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = true;
+        core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal;
+        if (tab.IsPrivate && cfg.Privacy.StrictPrivateTabs)
+        {
+            core.Settings.IsGeneralAutofillEnabled = false;
+            core.Settings.IsPasswordAutosaveEnabled = false;
+            core.Profile.IsGeneralAutofillEnabled = false;
+            core.Profile.IsPasswordAutosaveEnabled = false;
+        }
         var userAgent = ResolveUserAgent(cfg.Browser);
         if (!string.IsNullOrWhiteSpace(userAgent)) core.Settings.UserAgent = userAgent;
         core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
         core.WebResourceRequested += (_, e) => OnWebResourceRequested(tab, e);
-        core.NavigationStarting += (_, e) => { tab.IsLoading = true; tab.Address = e.Uri; tab.Url = e.Uri; };
+        core.NavigationStarting += (_, e) =>
+        {
+            core.Settings.UserAgent = IsGoogleTranslate(e.Uri) ? ChromeDesktopUserAgent : ResolveUserAgent(_settings.Current.Browser);
+            tab.BeginNavigation(e.Uri);
+        };
         core.SourceChanged += (_, _) => { tab.Url = core.Source; tab.Address = core.Source; };
         core.DocumentTitleChanged += (_, _) => tab.Title = string.IsNullOrWhiteSpace(core.DocumentTitle) ? LocalizationService.Text("NewTab") : core.DocumentTitle;
         core.HistoryChanged += (_, _) => { tab.CanGoBack = core.CanGoBack; tab.CanGoForward = core.CanGoForward; };
         core.NavigationCompleted += async (_, e) => await OnNavigationCompletedAsync(core, tab, e);
         core.NewWindowRequested += (_, e) => { e.Handled = true; NewTabRequested?.Invoke(e.Uri, tab.IsPrivate); };
-        core.PermissionRequested += (_, e) => OnPermissionRequested(e);
+        core.PermissionRequested += (_, e) => OnPermissionRequested(tab, e);
         core.DownloadStarting += (_, e) => _downloads.Handle(e);
+        core.WebResourceResponseReceived += (_, e) => OnWebResourceResponseReceived(tab, e);
         if (!tab.IsPrivate) _privacy.AttachProfile(core.Profile);
+        var bridge = new UserScriptBridge(!tab.IsPrivate);
+        _scriptBridges[core] = bridge;
+        try { core.AddHostObjectToScript("zzzUserscript", bridge); } catch { }
+        core.FrameCreated += (_, e) =>
+        {
+            try { e.Frame.AddHostObjectToScript("zzzUserscript", bridge, new[] { "*" }); } catch { }
+        };
         await RegisterDarkModeAsync(core);
+        await RegisterUserScriptsAsync(core);
     }
 
     private void OnWebResourceRequested(BrowserTabViewModel tab, CoreWebView2WebResourceRequestedEventArgs e)
@@ -146,16 +177,43 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         var url = e.Request.Uri;
         if (cfg.Advanced.EnableAdBlock && _adBlock.ShouldBlock(url))
         {
-            e.Response = _environment!.CreateWebResourceResponse(null, 403, "Blocked by ZZZ", "Content-Type: text/plain");
+            if (_tabEnvironments.TryGetValue(tab, out var environment))
+                e.Response = environment.CreateWebResourceResponse(null, 403, "Blocked by ZZZ", "Content-Type: text/plain");
             return;
         }
         if (cfg.Privacy.SendDoNotTrack) e.Request.Headers.SetHeader("DNT", "1");
+        if (cfg.Privacy.SendGlobalPrivacyControl) e.Request.Headers.SetHeader("Sec-GPC", "1");
         e.Request.Headers.SetHeader("Accept-Language", LocalizationService.CurrentLanguage);
+        if (tab.IsPrivate && cfg.Privacy.StrictPrivateTabs)
+        {
+            e.Request.Headers.SetHeader("Cache-Control", "no-store, max-age=0");
+            e.Request.Headers.SetHeader("Pragma", "no-cache");
+        }
         if (cfg.Privacy.BlockThirdPartyCookies && IsThirdParty(tab.Url, url))
         {
             try { e.Request.Headers.RemoveHeader("Cookie"); } catch { }
         }
-        if (cfg.Advanced.EnableResourceSniffer && TryMedia(url, out var kind)) tab.AddMedia(url, kind);
+        if (cfg.Advanced.EnableResourceSniffer && TryMedia(url, null, null, out var kind)) tab.AddMedia(url, kind);
+    }
+
+    private void OnWebResourceResponseReceived(BrowserTabViewModel tab, CoreWebView2WebResourceResponseReceivedEventArgs e)
+    {
+        if (!_settings.Current.Advanced.EnableResourceSniffer) return;
+        try
+        {
+            var mime = Header(e.Response.Headers, "Content-Type");
+            var disposition = Header(e.Response.Headers, "Content-Disposition");
+            if (!TryMedia(e.Request.Uri, mime, disposition, out var kind)) return;
+            long? length = long.TryParse(Header(e.Response.Headers, "Content-Length"), out var parsed) ? parsed : null;
+            tab.AddMedia(e.Request.Uri, kind, mime, length);
+        }
+        catch { }
+    }
+
+    private static string Header(CoreWebView2HttpResponseHeaders headers, string name)
+    {
+        try { return headers.Contains(name) ? headers.GetHeader(name) : string.Empty; }
+        catch { return string.Empty; }
     }
 
     private async Task OnNavigationCompletedAsync(CoreWebView2 core, BrowserTabViewModel tab, CoreWebView2NavigationCompletedEventArgs e)
@@ -171,8 +229,6 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
             await SafeScript(core, "Object.defineProperty(window,'RTCPeerConnection',{value:undefined});Object.defineProperty(window,'webkitRTCPeerConnection',{value:undefined});");
         var darkScript = WebDarkModeService.ScriptFor(ThemeService.EffectiveWebDarkMode(cfg));
         if (darkScript.Length > 0) await SafeScript(core, darkScript);
-        if (cfg.Advanced.EnableUserScripts)
-            foreach (var script in _scripts.Matching(tab.Url)) await SafeScript(core, script.Code);
         if (cfg.Privacy.BlockThirdPartyCookies) await RemoveThirdPartyCookiesAsync(core, tab.Url);
     }
 
@@ -192,9 +248,10 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         catch { }
     }
 
-    private void OnPermissionRequested(CoreWebView2PermissionRequestedEventArgs e)
+    private void OnPermissionRequested(BrowserTabViewModel tab, CoreWebView2PermissionRequestedEventArgs e)
     {
         var p = _settings.Current.Privacy;
+        if (tab.IsPrivate && p.StrictPrivateTabs) { e.State = CoreWebView2PermissionState.Deny; return; }
         if (e.PermissionKind == CoreWebView2PermissionKind.Geolocation && p.LocationPermission == PermissionPolicy.Deny) e.State = CoreWebView2PermissionState.Deny;
         if ((e.PermissionKind == CoreWebView2PermissionKind.Camera || e.PermissionKind == CoreWebView2PermissionKind.Microphone) && p.CameraMicrophonePermission == PermissionPolicy.Deny) e.State = CoreWebView2PermissionState.Deny;
     }
@@ -207,17 +264,27 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         _ => string.Empty
     };
 
+    private static bool IsGoogleTranslate(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        (uri.Host.Equals("translate.google.com", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".translate.goog", StringComparison.OrdinalIgnoreCase));
+
     private static bool IsThirdParty(string topUrl, string requestUrl)
     {
         if (!Uri.TryCreate(topUrl, UriKind.Absolute, out var top) || !Uri.TryCreate(requestUrl, UriKind.Absolute, out var request)) return false;
         return !request.Host.Equals(top.Host, StringComparison.OrdinalIgnoreCase) && !request.Host.EndsWith('.' + top.Host, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool TryMedia(string url, out string kind)
+    private static bool TryMedia(string url, string? contentType, string? contentDisposition, out string kind)
     {
         var clean = url.Split('?', '#')[0];
-        foreach (var ext in new[] { "m3u8", "mp4", "mp3", "webm", "m4a", "flac", "aac" })
-            if (clean.EndsWith('.' + ext, StringComparison.OrdinalIgnoreCase)) { kind = ext; return true; }
+        try { clean = Uri.UnescapeDataString(clean); } catch { }
+        if (!string.IsNullOrWhiteSpace(contentDisposition)) clean += " " + contentDisposition;
+        foreach (var ext in new[] { "m3u8", "mpd", "mp4", "m4v", "mov", "mkv", "webm", "mp3", "m4a", "flac", "aac", "ogg", "oga", "opus", "wav", "flv", "avi", "ts", "m2ts", "m4s" })
+            if (System.Text.RegularExpressions.Regex.IsMatch(clean, @"\." + ext + @"(?:$|[\s\""';])", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) { kind = ext; return true; }
+        var mime = (contentType ?? string.Empty).Split(';')[0].Trim().ToLowerInvariant();
+        if (mime.StartsWith("video/") || mime.StartsWith("audio/")) { kind = mime.Substring(mime.IndexOf('/') + 1); return true; }
+        if (mime.Contains("mpegurl") || mime.Contains("m3u8")) { kind = "m3u8"; return true; }
+        if (mime.Contains("dash+xml")) { kind = "mpd"; return true; }
+        if (mime.Contains("mp2t")) { kind = "ts"; return true; }
         kind = string.Empty; return false;
     }
 
@@ -236,6 +303,51 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         if (script.Length > 0) _darkScriptIds[core] = await core.AddScriptToExecuteOnDocumentCreatedAsync(script);
     }
 
+    private async Task RegisterUserScriptsAsync(CoreWebView2 core)
+    {
+        if (_userScriptIds.TryGetValue(core, out var oldId))
+        {
+            _userScriptIds.Remove(core);
+            try { core.RemoveScriptToExecuteOnDocumentCreated(oldId); } catch { }
+        }
+        if (!_settings.Current.Advanced.EnableUserScripts) return;
+        if (!_scripts.Items.Any(x => x.Enabled) || !_scriptBridges.TryGetValue(core, out var bridge)) return;
+        var bootstrap = UserScriptRuntime.BuildBootstrap(_scripts.Items, bridge.SecretForBootstrap);
+        if (bootstrap.Length > 0) _userScriptIds[core] = await core.AddScriptToExecuteOnDocumentCreatedAsync(bootstrap);
+    }
+
+    private Task<CoreWebView2Environment> GetEnvironmentAsync(bool isPrivate)
+    {
+        lock (_environmentGate)
+        {
+            if (!isPrivate)
+                return _environmentTask ??= CoreWebView2Environment.CreateAsync(null, AppPaths.WebViewData,
+                    new CoreWebView2EnvironmentOptions { Language = LocalizationService.CurrentLanguage });
+
+            Directory.CreateDirectory(_privateDataPath);
+            return _privateEnvironmentTask ??= CoreWebView2Environment.CreateAsync(null, _privateDataPath,
+                new CoreWebView2EnvironmentOptions
+                {
+                    Language = LocalizationService.CurrentLanguage,
+                    AdditionalBrowserArguments = "--disk-cache-size=1 --media-cache-size=1 --disable-features=AutofillServerCommunication,NetworkPrediction"
+                });
+        }
+    }
+
+    private void CleanupStalePrivateData()
+    {
+        try
+        {
+            if (!Directory.Exists(AppPaths.PrivateWebViewRoot)) return;
+            foreach (var path in Directory.GetDirectories(AppPaths.PrivateWebViewRoot))
+            {
+                if (string.Equals(path, _privateDataPath, StringComparison.OrdinalIgnoreCase)) continue;
+                try { Directory.Delete(path, true); } catch { }
+            }
+        }
+        catch { }
+    }
+
     public async Task ApplyCurrentSettingsAsync(bool reloadPages)
     {
         foreach (var weak in _views.Values.ToArray())
@@ -246,7 +358,17 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
             var userAgent = ResolveUserAgent(_settings.Current.Browser);
             core.Settings.UserAgent = userAgent;
             await RegisterDarkModeAsync(core);
+            await RegisterUserScriptsAsync(core);
             if (reloadPages) core.Reload();
+        }
+    }
+
+    public void SetActive(BrowserTabViewModel? activeTab)
+    {
+        foreach (var pair in _views)
+        {
+            if (!pair.Value.TryGetTarget(out var view) || view.CoreWebView2 is not { } core) continue;
+            try { core.MemoryUsageTargetLevel = ReferenceEquals(pair.Key, activeTab) ? CoreWebView2MemoryUsageTargetLevel.Normal : CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
         }
     }
 
@@ -254,9 +376,17 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     {
         if (!_views.TryGetValue(tab, out var weak) || !weak.TryGetTarget(out var view)) return;
         tab.Detach();
-        if (view.CoreWebView2 is { } core) _darkScriptIds.Remove(core);
+        if (view.CoreWebView2 is { } core)
+        {
+            _darkScriptIds.Remove(core);
+            _userScriptIds.Remove(core);
+            _scriptBridges.Remove(core);
+            if (tab.IsPrivate) _ = core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile);
+            try { core.RemoveHostObjectFromScript("zzzUserscript"); } catch { }
+        }
         view.Dispose();
         _views.Remove(tab);
+        _tabEnvironments.Remove(tab);
         tab.IsSleeping = true;
     }
 
@@ -265,6 +395,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     {
         foreach (var tab in _views.Keys.ToArray()) Close(tab);
         _views.Clear();
+        try { if (Directory.Exists(_privateDataPath)) Directory.Delete(_privateDataPath, true); } catch { }
     }
 }
 

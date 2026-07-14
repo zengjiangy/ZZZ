@@ -5,6 +5,7 @@ public enum UserAgentPreset { DefaultDesktop, AndroidMobile, IPad, Custom }
 public enum PermissionPolicy { Ask, Deny }
 public enum DownloadMode { BuiltIn, External }
 public enum WebContentDarkMode { Off, Smart, Force }
+public enum TranslationProvider { Google, Microsoft }
 
 public sealed class AppSettings
 {
@@ -32,6 +33,8 @@ public sealed class PrivacySettings
     public bool SendDoNotTrack { get; set; } = true;
     public bool DisableWebRtc { get; set; }
     public bool BlockThirdPartyCookies { get; set; } = true;
+    public bool SendGlobalPrivacyControl { get; set; } = true;
+    public bool StrictPrivateTabs { get; set; } = true;
     public PermissionPolicy LocationPermission { get; set; } = PermissionPolicy.Ask;
     public PermissionPolicy CameraMicrophonePermission { get; set; } = PermissionPolicy.Ask;
     public bool ClearOnExit { get; set; }
@@ -53,6 +56,8 @@ public sealed class BrowserSettings
     public string CustomUserAgent { get; set; } = string.Empty;
     public int SleepBackgroundTabsAfterMinutes { get; set; } = 15;
     public bool RestoreLastSession { get; set; } = true;
+    public TranslationProvider TranslationProvider { get; set; } = TranslationProvider.Google;
+    public string TranslationTargetLanguage { get; set; } = "zh-CN";
 }
 
 public sealed class AdvancedSettings
