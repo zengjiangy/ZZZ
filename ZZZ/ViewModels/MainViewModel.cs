@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ZZZ.Services;
+using ZZZ.Configuration;
 
 namespace ZZZ.ViewModels;
 
@@ -24,7 +25,7 @@ public partial class MainViewModel : ObservableObject
         var suppliedUrls = launchUrls?.Where(x => Uri.TryCreate(x, UriKind.Absolute, out _)).ToArray() ?? [];
         var startupUrls = suppliedUrls.Length > 0 ? suppliedUrls : (_services.Settings.Current.Browser.RestoreLastSession ? _services.Session.Urls : []);
         foreach (var url in startupUrls) CreateTab(url);
-        if (Tabs.Count == 0) CreateTab(_services.Settings.Current.HomePage);
+        if (Tabs.Count == 0) CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current));
         _sleepTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _sleepTimer.Tick += (_, _) => SleepIdleTabs();
         _sleepTimer.Start();
@@ -50,10 +51,10 @@ public partial class MainViewModel : ObservableObject
     private void UpdateBookmarkState() => IsCurrentPageBookmarked = SelectedTab is not null && _services.Bookmarks.Contains(SelectedTab.Url);
 
     [RelayCommand]
-    private void CreateTab() => CreateTab(_services.Settings.Current.HomePage);
+    private void CreateTab() => CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current));
 
     [RelayCommand]
-    private void CreatePrivateTab() => CreateTab(_services.Settings.Current.HomePage, true);
+    private void CreatePrivateTab() => CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current), true);
 
     public void CreateTab(string url, bool isPrivate = false)
     {
@@ -67,7 +68,7 @@ public partial class MainViewModel : ObservableObject
     private void CloseTab(BrowserTabViewModel tab)
     {
         var index = _services.Tabs.Close(tab);
-        if (Tabs.Count == 0) { CreateTab(_services.Settings.Current.HomePage); return; }
+        if (Tabs.Count == 0) { CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current)); return; }
         if (ReferenceEquals(SelectedTab, tab)) SelectedTab = Tabs[Math.Min(index, Tabs.Count - 1)];
     }
 
@@ -91,7 +92,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task AddBookmarkAsync()
     {
-        if (SelectedTab is null) return;
+        if (SelectedTab is null || SelectedTab.IsStartPage) return;
         await _services.Bookmarks.ToggleAsync(SelectedTab.Title, SelectedTab.Url);
         UpdateBookmarkState();
     }
@@ -101,6 +102,7 @@ public partial class MainViewModel : ObservableObject
         LocalizationService.Apply(_services.Settings.Current.Ui.Language);
         ThemeService.Apply(_services.Settings.Current.Appearance);
         await _services.Browser.ApplyCurrentSettingsAsync(reloadPages: true);
+        foreach (var tab in Tabs.Where(x => x.IsStartPage)) tab.RefreshStartPage();
         OnPropertyChanged(nameof(Services));
         OnPropertyChanged(string.Empty);
     }

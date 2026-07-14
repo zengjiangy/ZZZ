@@ -12,7 +12,7 @@
             <TabItem Header="{DynamicResource General}"><ScrollViewer><StackPanel Margin="20" MaxWidth="610">
                 <TextBlock Text="{DynamicResource Language}" FontWeight="SemiBold"/><ComboBox x:Name="LanguageBox" DisplayMemberPath="DisplayName" SelectedValuePath="Code" SelectedValue="{Binding Ui.Language}"/>
                 <TextBlock Text="{DynamicResource LanguageHint}" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,16"/>
-                <TextBlock Text="{DynamicResource HomePage}" FontWeight="SemiBold"/><TextBox Text="{Binding HomePage, UpdateSourceTrigger=PropertyChanged}" Margin="0,6,0,14"/>
+                <TextBlock Text="{DynamicResource HomePageMode}" FontWeight="SemiBold"/><ComboBox x:Name="StartupPageModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding StartupPageMode}" Margin="0,6,0,14"/>
                 <TextBlock Text="{DynamicResource SearchEngine}" FontWeight="SemiBold"/><ComboBox x:Name="SearchEngineBox" DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue="{Binding ActiveSearchEngineId}"/>
                 <TextBlock Text="{DynamicResource SearchEnginesHint}" Foreground="{DynamicResource MutedBrush}" Margin="0,9,0,4"/>
                 <DataGrid x:Name="SearchGrid" ItemsSource="{Binding SearchEngines}" AutoGenerateColumns="False" CanUserAddRows="True" MinHeight="150"><DataGrid.Columns><DataGridTextColumn Header="{DynamicResource Name}" Binding="{Binding Name}" Width="140"/><DataGridTextColumn Header="{DynamicResource UrlTemplate}" Binding="{Binding UrlTemplate}" Width="*"/></DataGrid.Columns></DataGrid>
@@ -25,6 +25,11 @@
                 </StackPanel></Border>
                 <TextBlock Text="{DynamicResource WebDarkMode}" FontWeight="SemiBold"/><ComboBox x:Name="WebDarkModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Advanced.WebDarkMode}"/>
                 <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="9" Padding="12" Margin="0,7,0,0"><TextBlock Text="{DynamicResource WebDarkHint}" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap"/></Border>
+                <TextBlock Text="{DynamicResource StartPageBackground}" FontWeight="SemiBold" Margin="0,18,0,4"/>
+                <TextBox Text="{Binding StartPage.BackgroundColor}" ToolTip="#101826"/>
+                <DockPanel Margin="0,8,0,0"><Button DockPanel.Dock="Right" Content="{DynamicResource Browse}" Click="BrowseBackground_Click" Margin="8,0,0,0"/><TextBox x:Name="BackgroundImageBox" Text="{Binding StartPage.BackgroundImage}" IsReadOnly="True"/></DockPanel>
+                <TextBlock Text="{DynamicResource BackgroundOpacity}" Margin="0,10,0,2"/><Slider Minimum="0.1" Maximum="1" TickFrequency="0.1" IsSnapToTickEnabled="True" Value="{Binding StartPage.BackgroundOpacity}"/>
+                <CheckBox Content="{DynamicResource ShowBookmarksOnStart}" IsChecked="{Binding StartPage.ShowBookmarks}" Margin="0,10,0,0"/>
             </StackPanel></ScrollViewer></TabItem>
             <TabItem Header="{DynamicResource Privacy}"><ScrollViewer><StackPanel Margin="20" MaxWidth="610">
                 <CheckBox Content="{DynamicResource SendDnt}" IsChecked="{Binding Privacy.SendDoNotTrack}"/><CheckBox Content="{DynamicResource SendGpc}" IsChecked="{Binding Privacy.SendGlobalPrivacyControl}"/><CheckBox Content="{DynamicResource DisableWebRtc}" IsChecked="{Binding Privacy.DisableWebRtc}"/><CheckBox Content="{DynamicResource BlockThirdPartyCookies}" IsChecked="{Binding Privacy.BlockThirdPartyCookies}"/><CheckBox Content="{DynamicResource StrictPrivateTabs}" IsChecked="{Binding Privacy.StrictPrivateTabs}"/>
@@ -39,6 +44,7 @@
                 <TextBlock Text="{DynamicResource CustomUserAgent}" Margin="0,10,0,2"/><TextBox Text="{Binding Browser.CustomUserAgent}"/>
                 <TextBlock Text="{DynamicResource TranslationProvider}" FontWeight="SemiBold" Margin="0,16,0,2"/><ComboBox x:Name="TranslationProviderBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Browser.TranslationProvider}"/>
                 <TextBlock Text="{DynamicResource TranslationTarget}" Margin="0,10,0,2"/><TextBox Text="{Binding Browser.TranslationTargetLanguage}" ToolTip="zh-CN / en / ja / fr"/>
+                <CheckBox Content="{DynamicResource AutoTranslate}" IsChecked="{Binding Browser.AutoTranslateForeignPages}" Margin="0,9,0,0"/>
                 <TextBlock Text="{DynamicResource ExternalPlayer}" FontWeight="SemiBold" Margin="0,16,0,2"/><TextBox Text="{Binding Advanced.ExternalPlayerPath}"/>
             </StackPanel></ScrollViewer></TabItem>
             <TabItem Header="{DynamicResource Downloads}"><StackPanel Margin="20" MaxWidth="610">
@@ -49,6 +55,9 @@
             </StackPanel></TabItem>
             <TabItem Header="{DynamicResource Backup}"><StackPanel Margin="20" MaxWidth="610">
                 <TextBlock Text="{DynamicResource PortableData}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/><TextBlock Text="{DynamicResource BackupHint}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"/>
+                <TextBlock Text="{DynamicResource DataStorageMode}" FontWeight="SemiBold" Margin="0,16,0,2"/><ComboBox x:Name="StorageModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Storage.Mode}"/>
+                <TextBlock Text="{DynamicResource CustomDataPath}" Margin="0,10,0,2"/><DockPanel><Button DockPanel.Dock="Right" Content="{DynamicResource Browse}" Click="BrowseDataPath_Click" Margin="8,0,0,0"/><TextBox Text="{Binding Storage.CustomPath, UpdateSourceTrigger=PropertyChanged}"/></DockPanel>
+                <TextBlock x:Name="CurrentDataPathText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
                 <WrapPanel Margin="0,18,0,0"><Button Content="{DynamicResource ExportSettings}" Click="ExportSettings_Click" Margin="0,0,8,0"/><Button Content="{DynamicResource ImportSettings}" Click="ImportSettings_Click"/></WrapPanel>
                 <WrapPanel Margin="0,10,0,0"><Button Content="{DynamicResource ExportRules}" Click="ExportRules_Click" Margin="0,0,8,0"/><Button Content="{DynamicResource ImportRules}" Click="ImportRules_Click"/></WrapPanel>
             </StackPanel></TabItem>

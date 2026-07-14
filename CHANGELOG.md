@@ -1,10 +1,20 @@
 # Changelog
 
+## 1.2 - 2026-07-14
+
+- 新增原生精简启动页：只保留搜索/地址输入框，并可显示书签；可在内置启动页和当前搜索引擎网站之间切换。
+- 启动页支持自定义纯色、静态图片和动态 GIF 背景；图片按显示尺寸解码，GIF 仅在可见时播放并限制帧数，启动页不会创建 WebView2 进程。
+- 修正第三方 Cookie 策略：不再跨站批量删除 Cookie，仅对已识别的第三方跟踪请求移除 Cookie，避免破坏 OAuth、统一登录与支付流程。
+- 新增微软 Edge 风格页内翻译，并设为默认翻译方案；保留 Google Chrome 请求模式，可按页面语言自动翻译为指定语言。
+- 清除浏览数据、清除历史记录、删除用户脚本以及覆盖导入设置/规则均增加二级确认。
+- 新增本机、便携和自定义数据目录三种模式；设置、书签、历史、脚本、WebView2 Cookie 与缓存可随 EXE 移动，并在重启前安全迁移。
+- 增加存储路径可写性/嵌套检查、翻译请求限流与分批处理、启动页自收藏防护等可靠性改进。
+
 ## 1.1 - 2026-07-14
 
-- Expanded userscript support with metadata parsing, correct run timing, imports, match/exclude rules, resources, persistent values, and common `GM_*` APIs.
-- Added one-click Google or Microsoft page translation with a configurable target language.
-- Improved media sniffing with response MIME/content metadata, HLS/DASH, and common audio/video formats.
-- Strengthened private tabs with a separate temporary WebView2 environment, memory-only private userscript values, disabled persistent cache/autofill/password saving, denied site permissions, GPC, and cleanup.
-- Reduced memory overhead through one shared application instance, a shared normal WebView2 environment, low-memory background tabs, bounded sniff results, and tab sleeping.
-- Added command-line URL handling and `Alt+D` address-bar focus alongside `Ctrl+L`.
+- 扩展用户脚本支持：元数据解析、正确运行时机、导入、匹配/排除规则、资源、持久值及常用 `GM_*` API。
+- 增加一键 Google / Microsoft 网页翻译和可配置目标语言。
+- 改进媒体嗅探：支持响应 MIME/内容元数据、HLS/DASH 及常见音视频格式。
+- 强化隐私标签页：独立临时 WebView2 环境、仅内存脚本值、禁用持久缓存/自动填充/密码保存、拒绝站点权限、GPC 及退出清理。
+- 通过单实例、共享普通 WebView2 环境、后台标签低内存模式、有限嗅探结果和标签休眠降低内存开销。
+- 增加命令行 URL 处理及 `Alt+D` 地址栏快捷键。

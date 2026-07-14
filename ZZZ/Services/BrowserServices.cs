@@ -87,6 +87,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private readonly IHistoryService _history;
     private readonly IDownloadService _downloads;
     private readonly IPrivacyService _privacy;
+    private readonly ITranslationService _translation;
     private readonly Dictionary<BrowserTabViewModel, WeakReference<WebView2>> _views = [];
     private readonly Dictionary<CoreWebView2, string> _darkScriptIds = [];
     private readonly Dictionary<CoreWebView2, string> _userScriptIds = [];
@@ -98,9 +99,9 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private Task<CoreWebView2Environment>? _privateEnvironmentTask;
     public event Action<string, bool>? NewTabRequested;
 
-    public BrowserLifecycleService(ISettingsService settings, IAdBlockService adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy)
+    public BrowserLifecycleService(ISettingsService settings, IAdBlockService adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy, ITranslationService translation)
     {
-        _settings = settings; _adBlock = adBlock; _scripts = scripts; _history = history; _downloads = downloads; _privacy = privacy;
+        _settings = settings; _adBlock = adBlock; _scripts = scripts; _history = history; _downloads = downloads; _privacy = privacy; _translation = translation;
         CleanupStalePrivateData();
     }
 
@@ -189,7 +190,11 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
             e.Request.Headers.SetHeader("Cache-Control", "no-store, max-age=0");
             e.Request.Headers.SetHeader("Pragma", "no-cache");
         }
-        if (cfg.Privacy.BlockThirdPartyCookies && IsThirdParty(tab.Url, url))
+        // Do not delete or blanket-strip cross-site cookies: that breaks OAuth,
+        // federated sign-in and payment flows. In balanced mode only known
+        // tracking requests lose their Cookie header; normal embedded services
+        // retain WebView2's standard SameSite protections.
+        if (cfg.Privacy.BlockThirdPartyCookies && IsThirdParty(tab.Url, url) && _adBlock.ShouldBlock(url))
         {
             try { e.Request.Headers.RemoveHeader("Cookie"); } catch { }
         }
@@ -229,23 +234,20 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
             await SafeScript(core, "Object.defineProperty(window,'RTCPeerConnection',{value:undefined});Object.defineProperty(window,'webkitRTCPeerConnection',{value:undefined});");
         var darkScript = WebDarkModeService.ScriptFor(ThemeService.EffectiveWebDarkMode(cfg));
         if (darkScript.Length > 0) await SafeScript(core, darkScript);
-        if (cfg.Privacy.BlockThirdPartyCookies) await RemoveThirdPartyCookiesAsync(core, tab.Url);
-    }
-
-    private async Task RemoveThirdPartyCookiesAsync(CoreWebView2 core, string topUrl)
-    {
-        if (!Uri.TryCreate(topUrl, UriKind.Absolute, out var top)) return;
-        try
+        if (cfg.Browser.AutoTranslateForeignPages && cfg.Browser.TranslationProvider == TranslationProvider.Microsoft)
         {
-            var cookies = await core.CookieManager.GetCookiesAsync(null);
-            foreach (var c in cookies)
+            try
             {
-                var domain = c.Domain.TrimStart('.');
-                if (!top.Host.Equals(domain, StringComparison.OrdinalIgnoreCase) && !top.Host.EndsWith('.' + domain, StringComparison.OrdinalIgnoreCase))
-                    core.CookieManager.DeleteCookie(c);
+                var target = string.IsNullOrWhiteSpace(cfg.Browser.TranslationTargetLanguage) ? "zh-CN" : cfg.Browser.TranslationTargetLanguage;
+                if (await _translation.ShouldAutoTranslateAsync(core, target))
+                {
+                    tab.Status = LocalizationService.Text("Translating");
+                    var count = await _translation.TranslatePageAsync(core, target);
+                    tab.Status = count > 0 ? LocalizationService.Text("TranslationComplete") : string.Empty;
+                }
             }
+            catch { tab.Status = LocalizationService.Text("TranslationFailed"); }
         }
-        catch { }
     }
 
     private void OnPermissionRequested(BrowserTabViewModel tab, CoreWebView2PermissionRequestedEventArgs e)
@@ -409,6 +411,7 @@ public sealed class AppServices : IDisposable
     public SessionService Session { get; } = new();
     public DownloadService Downloads { get; }
     public PrivacyService Privacy { get; }
+    public TranslationService Translation { get; } = new();
     public BrowserLifecycleService Browser { get; }
     public TabService Tabs { get; }
     public IMouseGestureService MouseGestures { get; } = new NullMouseGestureService();
@@ -417,7 +420,7 @@ public sealed class AppServices : IDisposable
     {
         Downloads = new DownloadService(Settings);
         Privacy = new PrivacyService(Settings, History);
-        Browser = new BrowserLifecycleService(Settings, AdBlock, UserScripts, History, Downloads, Privacy);
+        Browser = new BrowserLifecycleService(Settings, AdBlock, UserScripts, History, Downloads, Privacy, Translation);
         Tabs = new TabService(this);
     }
 
@@ -426,5 +429,5 @@ public sealed class AppServices : IDisposable
         Directory.CreateDirectory(AppPaths.Root);
         await Task.WhenAll(Settings.LoadAsync(), Bookmarks.LoadAsync(), History.LoadAsync(), UserScripts.LoadAsync(), AdBlock.LoadAsync(), Session.LoadAsync());
     }
-    public void Dispose() => Browser.Dispose();
+    public void Dispose() { Browser.Dispose(); Translation.Dispose(); }
 }

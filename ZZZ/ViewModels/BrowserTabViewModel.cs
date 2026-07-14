@@ -24,8 +24,10 @@ public partial class BrowserTabViewModel : ObservableObject
     [ObservableProperty] private bool isSleeping;
     [ObservableProperty] private string status = string.Empty;
     [ObservableProperty] private DateTime lastActiveUtc = DateTime.UtcNow;
+    [ObservableProperty] private int startPageRevision;
     public ObservableCollection<MediaResource> MediaResources { get; } = [];
     public bool HasMedia => MediaResources.Count > 0;
+    public bool IsStartPage => BrowserHome.IsStartPage(Url);
     public bool IsPrivate { get; }
 
     public BrowserTabViewModel(AppServices services, string url, bool isPrivate = false)
@@ -35,7 +37,7 @@ public partial class BrowserTabViewModel : ObservableObject
         title = LocalizationService.Text(isPrivate ? "PrivateTab" : "NewTab");
         this.url = url;
         address = url;
-        siteIdentity = IdentifySite(url);
+        siteIdentity = BrowserHome.IsStartPage(url) ? LocalizationService.Text("StartPage") : IdentifySite(url);
     }
 
     public void Attach(WebView2 view)
@@ -100,7 +102,19 @@ public partial class BrowserTabViewModel : ObservableObject
         });
     }
 
-    partial void OnUrlChanged(string value) => SiteIdentity = IdentifySite(value);
+    partial void OnUrlChanged(string value)
+    {
+        SiteIdentity = BrowserHome.IsStartPage(value) ? LocalizationService.Text("StartPage") : IdentifySite(value);
+        OnPropertyChanged(nameof(IsStartPage));
+    }
+
+    public void NavigateText(string text)
+    {
+        Address = text;
+        NavigateAddress();
+    }
+
+    public void RefreshStartPage() => StartPageRevision++;
 
     private static string IdentifySite(string value)
     {
@@ -138,20 +152,28 @@ public partial class BrowserTabViewModel : ObservableObject
     [RelayCommand] private void Stop() { _view?.CoreWebView2?.Stop(); }
     [RelayCommand] private void Home()
     {
-        Address = _services.Settings.Current.HomePage;
+        Address = BrowserHome.GetHomeUrl(_services.Settings.Current);
         NavigateAddress();
     }
-    [RelayCommand] private void Translate()
+    [RelayCommand] private async Task TranslateAsync()
     {
         if (!Uri.TryCreate(Url, UriKind.Absolute, out var source) || (source.Scheme != Uri.UriSchemeHttp && source.Scheme != Uri.UriSchemeHttps)) return;
         var browser = _services.Settings.Current.Browser;
         var targetLanguage = string.IsNullOrWhiteSpace(browser.TranslationTargetLanguage) ? "zh-CN" : browser.TranslationTargetLanguage.Trim();
-        var microsoftLanguage = targetLanguage.Equals("zh-CN", StringComparison.OrdinalIgnoreCase) ? "zh-Hans"
-            : targetLanguage.Equals("zh-TW", StringComparison.OrdinalIgnoreCase) ? "zh-Hant" : targetLanguage;
-        Address = browser.TranslationProvider == TranslationProvider.Microsoft
-            ? $"https://www.translatetheweb.com/?from=&to={Uri.EscapeDataString(microsoftLanguage)}&a={Uri.EscapeDataString(source.AbsoluteUri)}"
-            : $"https://translate.google.com/translate?sl=auto&tl={Uri.EscapeDataString(targetLanguage)}&u={Uri.EscapeDataString(source.AbsoluteUri)}";
-        NavigateAddress();
+        if (browser.TranslationProvider == TranslationProvider.Google)
+        {
+            Address = $"https://translate.google.com/translate?sl=auto&tl={Uri.EscapeDataString(targetLanguage)}&u={Uri.EscapeDataString(source.AbsoluteUri)}";
+            NavigateAddress();
+            return;
+        }
+        if (_view?.CoreWebView2 is not { } core) return;
+        try
+        {
+            Status = LocalizationService.Text("Translating");
+            var count = await _services.Translation.TranslatePageAsync(core, targetLanguage);
+            Status = count > 0 ? LocalizationService.Text("TranslationComplete") : LocalizationService.Text("NothingToTranslate");
+        }
+        catch { Status = LocalizationService.Text("TranslationFailed"); }
     }
     [RelayCommand] private void OpenDevTools() { if (_services.Settings.Current.Advanced.EnableDeveloperTools) _view?.CoreWebView2?.OpenDevToolsWindow(); }
 }

@@ -29,7 +29,7 @@ public partial class LibraryWindow : Window
     private async void ImportBookmarks_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "Bookmarks HTML|*.html;*.htm" }; if (d.ShowDialog() == true) { await _main.Services.Bookmarks.ImportHtmlAsync(d.FileName); BookmarksGrid.Items.Refresh(); } }
     private async void ExportBookmarks_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "HTML|*.html", FileName = "zzz-bookmarks.html" }; if (d.ShowDialog() == true) await _main.Services.Bookmarks.ExportHtmlAsync(d.FileName); }
     private void OpenHistory_Click(object sender, RoutedEventArgs e) { if (HistoryGrid.SelectedItem is HistoryEntry h) { _main.CreateTab(h.Url); Close(); } }
-    private async void ClearHistory_Click(object sender, RoutedEventArgs e) { await _main.Services.History.ClearAsync(); HistoryGrid.Items.Refresh(); }
+    private async void ClearHistory_Click(object sender, RoutedEventArgs e) { if (!ConfirmSensitive("ClearHistory")) return; await _main.Services.History.ClearAsync(); HistoryGrid.Items.Refresh(); }
     private void NewScript_Click(object sender, RoutedEventArgs e) { var s = new UserScript { Name = "New script", Match = "*", Code = "// Runs after navigation\n" }; _scripts.Add(s); ScriptsGrid.SelectedItem = s; }
     private async void ImportScript_Click(object sender, RoutedEventArgs e)
     {
@@ -46,8 +46,14 @@ public partial class LibraryWindow : Window
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, LocalizationService.Text("Userscripts"), MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
-    private void RemoveScript_Click(object sender, RoutedEventArgs e) { if (ScriptsGrid.SelectedItem is UserScript s) _scripts.Remove(s); }
+    private void RemoveScript_Click(object sender, RoutedEventArgs e) { if (ScriptsGrid.SelectedItem is UserScript s && ConfirmSensitive("RemoveScript")) _scripts.Remove(s); }
     private async void SaveScripts_Click(object sender, RoutedEventArgs e) { ScriptsGrid.CommitEdit(); await _main.Services.UserScripts.SaveAsync(_scripts); await _main.ReapplySettingsAsync(); }
     private void ScriptsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
+    private bool ConfirmSensitive(string operationKey)
+    {
+        var operation = LocalizationService.Text(operationKey);
+        if (MessageBox.Show(this, string.Format(LocalizationService.Text("SensitiveConfirmFirst"), operation), operation, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return false;
+        return MessageBox.Show(this, string.Format(LocalizationService.Text("SensitiveConfirmFinal"), operation), operation, MessageBoxButton.YesNo, MessageBoxImage.Stop) == MessageBoxResult.Yes;
+    }
     private static UserScript Clone(UserScript source) => JsonSerializer.Deserialize<UserScript>(JsonSerializer.Serialize(source)) ?? new UserScript();
 }

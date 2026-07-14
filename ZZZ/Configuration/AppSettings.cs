@@ -6,10 +6,15 @@ public enum PermissionPolicy { Ask, Deny }
 public enum DownloadMode { BuiltIn, External }
 public enum WebContentDarkMode { Off, Smart, Force }
 public enum TranslationProvider { Google, Microsoft }
+public enum StartupPageMode { StartPage, SearchEngineWebsite }
+public enum DataStorageMode { LocalAppData, Portable, Custom }
 
 public sealed class AppSettings
 {
-    public string HomePage { get; set; } = "https://www.bing.com";
+    // Retained for migration from 1.1. Home navigation is controlled by
+    // StartupPageMode in 1.2.
+    public string HomePage { get; set; } = "zzz://start/";
+    public StartupPageMode StartupPageMode { get; set; } = StartupPageMode.StartPage;
     public string ActiveSearchEngineId { get; set; } = "bing";
     public List<SearchEngine> SearchEngines { get; set; } = SearchEngine.Defaults();
     public AppearanceMode Appearance { get; set; } = AppearanceMode.System;
@@ -18,6 +23,8 @@ public sealed class AppSettings
     public BrowserSettings Browser { get; set; } = new();
     public AdvancedSettings Advanced { get; set; } = new();
     public DownloadSettings Downloads { get; set; } = new();
+    public StartPageSettings StartPage { get; set; } = new();
+    public StorageSettings Storage { get; set; } = new();
 }
 
 public sealed class UiSettings
@@ -56,8 +63,23 @@ public sealed class BrowserSettings
     public string CustomUserAgent { get; set; } = string.Empty;
     public int SleepBackgroundTabsAfterMinutes { get; set; } = 15;
     public bool RestoreLastSession { get; set; } = true;
-    public TranslationProvider TranslationProvider { get; set; } = TranslationProvider.Google;
+    public TranslationProvider TranslationProvider { get; set; } = TranslationProvider.Microsoft;
     public string TranslationTargetLanguage { get; set; } = "zh-CN";
+    public bool AutoTranslateForeignPages { get; set; }
+}
+
+public sealed class StartPageSettings
+{
+    public string BackgroundColor { get; set; } = "#101826";
+    public string BackgroundImage { get; set; } = string.Empty;
+    public double BackgroundOpacity { get; set; } = 1.0;
+    public bool ShowBookmarks { get; set; } = true;
+}
+
+public sealed class StorageSettings
+{
+    public DataStorageMode Mode { get; set; } = DataStorageMode.LocalAppData;
+    public string CustomPath { get; set; } = string.Empty;
 }
 
 public sealed class AdvancedSettings
@@ -93,4 +115,20 @@ public sealed class SearchEngine
         new() { Id = "baidu", Name = "Baidu", UrlTemplate = "https://www.baidu.com/s?wd={query}" },
         new() { Id = "duckduckgo", Name = "DuckDuckGo", UrlTemplate = "https://duckduckgo.com/?q={query}" }
     ];
+}
+
+public static class BrowserHome
+{
+    public const string StartPageUrl = "zzz://start/";
+
+    public static string GetHomeUrl(AppSettings settings)
+    {
+        if (settings.StartupPageMode == StartupPageMode.StartPage) return StartPageUrl;
+        var engine = settings.SearchEngines.FirstOrDefault(x => x.Id == settings.ActiveSearchEngineId) ?? settings.SearchEngines.FirstOrDefault();
+        if (engine is not null && Uri.TryCreate(engine.UrlTemplate.Replace("{query}", string.Empty), UriKind.Absolute, out var uri))
+            return uri.GetLeftPart(UriPartial.Authority) + "/";
+        return "https://www.bing.com/";
+    }
+
+    public static bool IsStartPage(string? url) => string.Equals(url?.TrimEnd('/'), StartPageUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
 }

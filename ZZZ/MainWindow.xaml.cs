@@ -65,9 +65,10 @@ public partial class MainWindow : Window
         var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
-        if (ctrl && shift && e.Key == Key.N) { ViewModel.CreateTab(ViewModel.Services.Settings.Current.HomePage, true); e.Handled = true; }
-        else if (ctrl && shift && e.Key == Key.T) { ViewModel.CreateTab(ViewModel.Services.History.Items.FirstOrDefault()?.Url ?? ViewModel.Services.Settings.Current.HomePage); e.Handled = true; }
-        else if (ctrl && e.Key == Key.T) { ViewModel.CreateTab(ViewModel.Services.Settings.Current.HomePage); e.Handled = true; }
+        var home = BrowserHome.GetHomeUrl(ViewModel.Services.Settings.Current);
+        if (ctrl && shift && e.Key == Key.N) { ViewModel.CreateTab(home, true); e.Handled = true; }
+        else if (ctrl && shift && e.Key == Key.T) { ViewModel.CreateTab(ViewModel.Services.History.Items.FirstOrDefault()?.Url ?? home); e.Handled = true; }
+        else if (ctrl && e.Key == Key.T) { ViewModel.CreateTab(home); e.Handled = true; }
         else if (ctrl && e.Key == Key.W && ViewModel.SelectedTab is not null) { ViewModel.CloseTabCommand.Execute(ViewModel.SelectedTab); e.Handled = true; }
         else if ((ctrl && e.Key == Key.L) || (alt && e.Key == Key.D)) { AddressBox.Focus(); AddressBox.SelectAll(); e.Handled = true; }
         else if (ctrl && e.Key == Key.R) { ViewModel.SelectedTab?.ReloadCommand.Execute(null); e.Handled = true; }
@@ -80,8 +81,9 @@ public partial class MainWindow : Window
     private void MenuButton_Click(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu();
-        menu.Items.Add(Item(LocalizationService.Text("NewTab"), (_, _) => ViewModel.CreateTab(ViewModel.Services.Settings.Current.HomePage), "Ctrl+T"));
-        menu.Items.Add(Item(LocalizationService.Text("NewPrivateTab"), (_, _) => ViewModel.CreateTab(ViewModel.Services.Settings.Current.HomePage, true), "Ctrl+Shift+N"));
+        var home = BrowserHome.GetHomeUrl(ViewModel.Services.Settings.Current);
+        menu.Items.Add(Item(LocalizationService.Text("NewTab"), (_, _) => ViewModel.CreateTab(home), "Ctrl+T"));
+        menu.Items.Add(Item(LocalizationService.Text("NewPrivateTab"), (_, _) => ViewModel.CreateTab(home, true), "Ctrl+Shift+N"));
         menu.Items.Add(Item(LocalizationService.Text("Library"), (_, _) => new LibraryWindow(ViewModel).ShowDialog()));
         menu.Items.Add(Item(LocalizationService.Text("Downloads"), (_, _) => new DownloadsWindow(ViewModel.Services.Downloads).Show()));
         menu.Items.Add(new Separator());
@@ -126,7 +128,10 @@ public partial class MainWindow : Window
     private async Task ClearBrowsingDataAsync()
     {
         var dialog = new ClearDataWindow(ViewModel.Services.Settings.Current.Privacy.ClearOnExitItems) { Owner = this };
-        if (dialog.ShowDialog() == true) await ViewModel.Services.Privacy.ClearAsync(dialog.Selection);
+        if (dialog.ShowDialog() != true) return;
+        if (MessageBox.Show(this, LocalizationService.Text("ClearDataFinalConfirm"), LocalizationService.Text("ClearDataTitle"), MessageBoxButton.YesNo, MessageBoxImage.Stop) != MessageBoxResult.Yes) return;
+        await ViewModel.Services.Privacy.ClearAsync(dialog.Selection);
+        MessageBox.Show(this, LocalizationService.Text("ClearComplete"), LocalizationService.Text("ClearDataTitle"), MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private async Task CaptureRegionAsync()

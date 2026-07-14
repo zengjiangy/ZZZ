@@ -14,7 +14,11 @@ namespace ZZZ.Services;
 
 public static class AppPaths
 {
-    public static string Root { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ZZZ");
+    private const string LocationFileName = "zzz-data-location.json";
+    public static string ExecutableDirectory { get; } = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    public static string Root { get; private set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ZZZ");
+    public static DataStorageMode StorageMode { get; private set; } = DataStorageMode.LocalAppData;
+    public static string CustomStoragePath { get; private set; } = string.Empty;
     public static string Settings => Path.Combine(Root, "settings.json");
     public static string Bookmarks => Path.Combine(Root, "bookmarks.json");
     public static string History => Path.Combine(Root, "history.json");
@@ -24,6 +28,105 @@ public static class AppPaths
     public static string Session => Path.Combine(Root, "session.json");
     public static string WebViewData => Path.Combine(Root, "WebView2");
     public static string PrivateWebViewRoot => Path.Combine(Path.GetTempPath(), "ZZZ", "Private");
+
+    private static string LocationFile => Path.Combine(ExecutableDirectory, LocationFileName);
+
+    public static void Initialize()
+    {
+        var config = LoadLocation();
+        StorageMode = config.Mode;
+        CustomStoragePath = config.CustomPath ?? string.Empty;
+        var target = ResolveRoot(StorageMode, CustomStoragePath);
+
+        if (!string.IsNullOrWhiteSpace(config.PendingMigrationFrom) &&
+            !SamePath(config.PendingMigrationFrom, target) && Directory.Exists(config.PendingMigrationFrom))
+        {
+            try
+            {
+                CopyDirectory(config.PendingMigrationFrom, target);
+                config.PendingMigrationFrom = string.Empty;
+                SaveLocation(config);
+            }
+            catch
+            {
+                // Continue with the selected directory. Existing data remains at
+                // the old location so a failed migration is never destructive.
+            }
+        }
+
+        Root = target;
+        Directory.CreateDirectory(Root);
+    }
+
+    public static void ScheduleStorageChange(StorageSettings storage)
+    {
+        var target = ResolveRoot(storage.Mode, storage.CustomPath);
+        var currentWithSeparator = Path.GetFullPath(Root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var targetWithSeparator = Path.GetFullPath(target).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!SamePath(Root, target) && targetWithSeparator.StartsWith(currentWithSeparator, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(LocalizationService.Text("NestedDataPathInvalid"));
+        Directory.CreateDirectory(target);
+        var probe = Path.Combine(target, $".zzz-write-{Guid.NewGuid():N}.tmp");
+        File.WriteAllText(probe, "ok");
+        File.Delete(probe);
+
+        SaveLocation(new DataLocationConfig
+        {
+            Mode = storage.Mode,
+            CustomPath = storage.CustomPath?.Trim() ?? string.Empty,
+            PendingMigrationFrom = SamePath(Root, target) ? string.Empty : Root
+        });
+    }
+
+    public static string ResolveDataFile(string path) => string.IsNullOrWhiteSpace(path) ? string.Empty
+        : Path.IsPathRooted(path) ? path : Path.Combine(Root, path);
+
+    private static DataLocationConfig LoadLocation()
+    {
+        try
+        {
+            if (!File.Exists(LocationFile)) return new DataLocationConfig();
+            return JsonSerializer.Deserialize<DataLocationConfig>(File.ReadAllText(LocationFile), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new DataLocationConfig();
+        }
+        catch { return new DataLocationConfig(); }
+    }
+
+    private static void SaveLocation(DataLocationConfig config)
+    {
+        var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(LocationFile, json);
+    }
+
+    private static string ResolveRoot(DataStorageMode mode, string? customPath)
+    {
+        var path = mode switch
+        {
+            DataStorageMode.Portable => Path.Combine(ExecutableDirectory, "Data"),
+            DataStorageMode.Custom when !string.IsNullOrWhiteSpace(customPath) => Environment.ExpandEnvironmentVariables(customPath!.Trim()),
+            _ => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ZZZ")
+        };
+        return Path.GetFullPath(path);
+    }
+
+    private static bool SamePath(string left, string right) => string.Equals(
+        Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar),
+        Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar),
+        StringComparison.OrdinalIgnoreCase);
+
+    private static void CopyDirectory(string source, string target)
+    {
+        Directory.CreateDirectory(target);
+        foreach (var file in Directory.GetFiles(source)) File.Copy(file, Path.Combine(target, Path.GetFileName(file)), true);
+        foreach (var directory in Directory.GetDirectories(source))
+            CopyDirectory(directory, Path.Combine(target, Path.GetFileName(directory)));
+    }
+
+    private sealed class DataLocationConfig
+    {
+        public DataStorageMode Mode { get; set; } = DataStorageMode.LocalAppData;
+        public string CustomPath { get; set; } = string.Empty;
+        public string PendingMigrationFrom { get; set; } = string.Empty;
+    }
 }
 
 internal static class JsonFiles
@@ -68,6 +171,8 @@ public sealed class SettingsService : ISettingsService
     public async Task LoadAsync()
     {
         Current = await JsonFiles.LoadAsync(AppPaths.Settings, () => new AppSettings());
+        Current.Storage.Mode = AppPaths.StorageMode;
+        Current.Storage.CustomPath = AppPaths.CustomStoragePath;
         if (Current.Advanced.ForceDarkWebContent)
         {
             Current.Advanced.WebDarkMode = WebContentDarkMode.Force;
