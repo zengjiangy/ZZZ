@@ -41,20 +41,43 @@ public sealed class DownloadService(ISettingsService settings) : IDownloadServic
         var suggested = Path.GetFileName(args.ResultFilePath);
         if (string.IsNullOrWhiteSpace(suggested)) suggested = "download";
         args.ResultFilePath = UniquePath(Path.Combine(config.Folder, suggested));
-        var item = new DownloadItem { FileName = Path.GetFileName(args.ResultFilePath), SourceUrl = args.DownloadOperation.Uri, ResultPath = args.ResultFilePath };
+        var item = new DownloadItem
+        {
+            FileName = Path.GetFileName(args.ResultFilePath),
+            SourceUrl = args.DownloadOperation.Uri,
+            ResultPath = args.ResultFilePath,
+            MimeType = args.DownloadOperation.MimeType,
+            StartedAt = DateTime.Now,
+            Status = LocalizationService.Text("DownloadStarting")
+        };
         Items.Insert(0, item);
         args.DownloadOperation.BytesReceivedChanged += (_, _) => Update(item, args.DownloadOperation);
         args.DownloadOperation.StateChanged += (_, _) => Update(item, args.DownloadOperation);
+        Update(item, args.DownloadOperation);
     }
 
     private static void Update(DownloadItem item, CoreWebView2DownloadOperation op)
     {
-        item.Progress = op.TotalBytesToReceive is > 0 and var total ? op.BytesReceived * 100d / total : 0;
+        item.BytesReceived = op.BytesReceived;
+        item.TotalBytes = op.TotalBytesToReceive is > 0 and var total && total <= long.MaxValue ? (long)total : null;
+        item.MimeType = op.MimeType;
+        item.Progress = item.TotalBytes is > 0 and var totalBytes ? Math.Min(100, item.BytesReceived * 100d / totalBytes) : 0;
+        if (op.State == CoreWebView2DownloadState.Completed)
+        {
+            item.CompletedAt ??= DateTime.Now;
+            if (item.TotalBytes is null && File.Exists(item.ResultPath)) item.TotalBytes = new FileInfo(item.ResultPath).Length;
+            item.Progress = 100;
+        }
+        item.InterruptReason = op.State == CoreWebView2DownloadState.Interrupted && op.InterruptReason != CoreWebView2DownloadInterruptReason.None
+            ? op.InterruptReason.ToString()
+            : string.Empty;
         item.Status = op.State switch
         {
-            CoreWebView2DownloadState.Completed => "Completed",
-            CoreWebView2DownloadState.Interrupted => "Interrupted",
-            _ => $"{item.Progress:0}%"
+            CoreWebView2DownloadState.Completed => LocalizationService.Text("DownloadCompleted"),
+            CoreWebView2DownloadState.Interrupted => string.IsNullOrWhiteSpace(item.InterruptReason)
+                ? LocalizationService.Text("DownloadInterrupted")
+                : $"{LocalizationService.Text("DownloadInterrupted")} · {item.InterruptReason}",
+            _ => item.TotalBytes is > 0 ? $"{item.Progress:0}%" : LocalizationService.Text("Downloading")
         };
     }
 

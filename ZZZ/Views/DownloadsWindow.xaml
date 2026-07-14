@@ -1,10 +1,18 @@
 <Window x:Class="ZZZ.Views.DownloadsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Style="{StaticResource AppWindowStyle}"
-        Title="{DynamicResource Downloads}" Height="430" Width="740" MinHeight="320" MinWidth="560" WindowStartupLocation="CenterOwner">
+        Title="{DynamicResource Downloads}" Height="540" Width="1180" MinHeight="380" MinWidth="820" WindowStartupLocation="CenterOwner">
     <Grid Margin="14" Background="{DynamicResource WindowBrush}"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <TextBlock Text="{DynamicResource Downloads}" FontSize="21" FontWeight="SemiBold" Margin="5,2,0,12"/>
-        <DataGrid Grid.Row="1" x:Name="Grid" AutoGenerateColumns="False" IsReadOnly="True">
-            <DataGrid.Columns><DataGridTextColumn Header="{DynamicResource Name}" Binding="{Binding FileName}" Width="2*"/><DataGridTextColumn Header="{DynamicResource Status}" Binding="{Binding Status}" Width="90"/><DataGridTextColumn Header="{DynamicResource SavedTo}" Binding="{Binding ResultPath}" Width="3*"/></DataGrid.Columns>
+        <StackPanel Margin="5,2,0,12"><TextBlock Text="{DynamicResource Downloads}" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="{DynamicResource DownloadOpenHint}" Foreground="{DynamicResource MutedBrush}" Margin="0,4,0,0"/></StackPanel>
+        <DataGrid Grid.Row="1" x:Name="Grid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" MouseDoubleClick="Grid_MouseDoubleClick" RowHeaderWidth="0">
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="{DynamicResource Name}" Width="2*"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel ToolTip="{Binding SourceUrl}"><TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding MimeType}" Foreground="{DynamicResource MutedBrush}" FontSize="10" TextTrimming="CharacterEllipsis"/></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                <DataGridTextColumn Header="{DynamicResource FileSize}" Binding="{Binding SizeText}" Width="95"/>
+                <DataGridTemplateColumn Header="{DynamicResource DownloadProgress}" Width="155"><DataGridTemplateColumn.CellTemplate><DataTemplate><Grid ToolTip="{Binding TransferredText}"><ProgressBar Value="{Binding Progress}" Maximum="100" Height="8" VerticalAlignment="Center" Margin="0,15,44,0"/><TextBlock Text="{Binding TransferredText}" FontSize="10" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Top" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Progress, StringFormat={}{0:0}%}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                <DataGridTextColumn Header="{DynamicResource DownloadStarted}" Binding="{Binding StartedAtText}" Width="145"/>
+                <DataGridTextColumn Header="{DynamicResource DownloadCompletedAt}" Binding="{Binding CompletedAtText}" Width="145"/>
+                <DataGridTextColumn Header="{DynamicResource Status}" Binding="{Binding Status}" Width="150"/>
+                <DataGridTextColumn Header="{DynamicResource SavedTo}" Binding="{Binding ResultPath}" Width="2*"/>
+            </DataGrid.Columns>
         </DataGrid>
-        <Button Grid.Row="2" Content="{DynamicResource OpenFolder}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OpenFolder_Click"/>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0"><Button Content="{DynamicResource OpenFile}" Click="OpenFile_Click" Style="{StaticResource PrimaryButton}"/><Button Content="{DynamicResource OpenFolder}" Click="OpenFolder_Click" Margin="8,0,0,0"/></StackPanel>
     </Grid>
 </Window>

@@ -62,6 +62,44 @@ public partial class DownloadItem : ObservableObject
     [ObservableProperty] private string fileName = string.Empty;
     [ObservableProperty] private string sourceUrl = string.Empty;
     [ObservableProperty] private string resultPath = string.Empty;
+    [ObservableProperty] private string mimeType = string.Empty;
+    [ObservableProperty] private long bytesReceived;
+    [ObservableProperty] private long? totalBytes;
     [ObservableProperty] private double progress;
-    [ObservableProperty] private string status = "Starting";
+    [ObservableProperty] private string status = string.Empty;
+    [ObservableProperty] private string interruptReason = string.Empty;
+    [ObservableProperty] private DateTime startedAt = DateTime.Now;
+    [ObservableProperty] private DateTime? completedAt;
+
+    public string SizeText => FormatBytes(TotalBytes ?? (BytesReceived > 0 ? BytesReceived : null));
+    public string TransferredText => TotalBytes is > 0
+        ? $"{FormatBytes(BytesReceived)} / {FormatBytes(TotalBytes)}"
+        : FormatBytes(BytesReceived > 0 ? BytesReceived : null);
+    public string StartedAtText => StartedAt.ToString("yyyy-MM-dd HH:mm:ss");
+    public string CompletedAtText => CompletedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—";
+
+    partial void OnBytesReceivedChanged(long value)
+    {
+        OnPropertyChanged(nameof(SizeText));
+        OnPropertyChanged(nameof(TransferredText));
+    }
+
+    partial void OnTotalBytesChanged(long? value)
+    {
+        OnPropertyChanged(nameof(SizeText));
+        OnPropertyChanged(nameof(TransferredText));
+    }
+
+    partial void OnStartedAtChanged(DateTime value) => OnPropertyChanged(nameof(StartedAtText));
+    partial void OnCompletedAtChanged(DateTime? value) => OnPropertyChanged(nameof(CompletedAtText));
+
+    private static string FormatBytes(long? value)
+    {
+        if (value is not > 0) return "—";
+        var bytes = value.Value;
+        if (bytes >= 1024L * 1024 * 1024) return $"{bytes / 1024d / 1024d / 1024d:0.##} GB";
+        if (bytes >= 1024L * 1024) return $"{bytes / 1024d / 1024d:0.##} MB";
+        if (bytes >= 1024) return $"{bytes / 1024d:0.##} KB";
+        return $"{bytes} B";
+    }
 }

@@ -5,7 +5,7 @@
     <TargetFramework>net48</TargetFramework>
     <AssemblyName>ZZZ</AssemblyName>
     <RootNamespace>ZZZ</RootNamespace>
-    <Version>1.5.1</Version>
+    <Version>1.5.2</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\zzz.ico</ApplicationIcon>
     <LangVersion>latest</LangVersion>

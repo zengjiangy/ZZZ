@@ -20,6 +20,7 @@ public partial class App : Application
             Shutdown();
             return;
         }
+        DevToolsPreferenceService.SuppressObsoleteWebHintBanner();
         NativeDependencyService.PrepareWebView2Loader();
         EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler(Window_Loaded));
         Services = new AppServices();

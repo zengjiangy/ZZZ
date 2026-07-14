@@ -92,7 +92,7 @@ public partial class MainWindow : Window
         else if (ctrl && e.Key == Key.F) { ShowFind(); e.Handled = true; }
         else if (alt && e.Key == Key.Left) { ViewModel.SelectedTab?.BackCommand.Execute(null); e.Handled = true; }
         else if (alt && e.Key == Key.Right) { ViewModel.SelectedTab?.ForwardCommand.Execute(null); e.Handled = true; }
-        else if (e.Key == Key.F12) { ViewModel.SelectedTab?.OpenDevToolsCommand.Execute(null); e.Handled = true; }
+        else if (e.Key == Key.F12) { OpenDeveloperTools(); e.Handled = true; }
         else if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; }
     }
 
@@ -112,7 +112,7 @@ public partial class MainWindow : Window
         menu.Items.Add(BuildSplitMenu());
         menu.Items.Add(Item(LocalizationService.Text("Fullscreen"), (_, _) => ToggleFullscreen(), "F11"));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Item(LocalizationService.Text("DeveloperTools"), (_, _) => ViewModel.SelectedTab?.OpenDevToolsCommand.Execute(null), "F12"));
+        menu.Items.Add(Item(LocalizationService.Text("DeveloperTools"), (_, _) => OpenDeveloperTools(), "F12"));
         menu.Items.Add(Item(LocalizationService.Text("ClearBrowsingData"), async (_, _) => await ClearBrowsingDataAsync()));
         var theme = new MenuItem { Header = LocalizationService.Text("Theme") };
         theme.Items.Add(ThemeItem(AppearanceMode.System, "FollowSystem"));
@@ -131,6 +131,16 @@ public partial class MainWindow : Window
         var item = new MenuItem { Header = title, InputGestureText = gesture };
         item.Click += handler;
         return item;
+    }
+
+    private void OpenDeveloperTools()
+    {
+        if (!ViewModel.Services.Settings.Current.Advanced.EnableDeveloperTools)
+        {
+            new SettingsWindow(ViewModel, showAdvanced: true).ShowDialog();
+            return;
+        }
+        ViewModel.SelectedTab?.OpenDevToolsCommand.Execute(null);
     }
 
     private MenuItem ThemeItem(AppearanceMode mode, string labelKey)

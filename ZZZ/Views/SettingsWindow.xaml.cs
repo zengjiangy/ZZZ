@@ -12,7 +12,7 @@ public partial class SettingsWindow : Window
     private readonly MainViewModel _main;
     private AppSettings _working;
     private string _pendingBackgroundSource = string.Empty;
-    public SettingsWindow(MainViewModel main)
+    public SettingsWindow(MainViewModel main, bool showAdvanced = false)
     {
         InitializeComponent();
         _main = main;
@@ -32,6 +32,7 @@ public partial class SettingsWindow : Window
         StorageModeBox.ItemsSource = new[] { Choice(DataStorageMode.LocalAppData, "LocalData"), Choice(DataStorageMode.Portable, "PortableMode"), Choice(DataStorageMode.Custom, "CustomData") };
         SearchEngineBox.ItemsSource = _working.SearchEngines;
         CurrentDataPathText.Text = $"{LocalizationService.Text("CurrentDataPath")}: {AppPaths.Root}";
+        if (showAdvanced) SettingsTabs.SelectedItem = AdvancedTab;
     }
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
