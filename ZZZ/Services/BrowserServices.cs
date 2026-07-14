@@ -5,6 +5,9 @@ using Microsoft.Web.WebView2.Wpf;
 using ZZZ.Configuration;
 using ZZZ.Models;
 using ZZZ.ViewModels;
+using ZZZ.Views;
+using System.Text.Json;
+using System.Windows;
 
 namespace ZZZ.Services;
 
@@ -158,6 +161,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         core.NavigationCompleted += async (_, e) => await OnNavigationCompletedAsync(core, tab, e);
         core.NewWindowRequested += (_, e) => { e.Handled = true; NewTabRequested?.Invoke(e.Uri, tab.IsPrivate); };
         core.PermissionRequested += (_, e) => OnPermissionRequested(tab, e);
+        core.WebMessageReceived += async (_, e) => await OnWebMessageReceivedAsync(core, tab, e);
         core.DownloadStarting += (_, e) => _downloads.Handle(e);
         core.WebResourceResponseReceived += (_, e) => OnWebResourceResponseReceived(tab, e);
         if (!tab.IsPrivate) _privacy.AttachProfile(core.Profile);
@@ -170,6 +174,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         };
         await RegisterDarkModeAsync(core);
         await RegisterUserScriptsAsync(core);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(LocationBootstrap);
     }
 
     private void OnWebResourceRequested(BrowserTabViewModel tab, CoreWebView2WebResourceRequestedEventArgs e)
@@ -254,9 +259,54 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     {
         var p = _settings.Current.Privacy;
         if (tab.IsPrivate && p.StrictPrivateTabs) { e.State = CoreWebView2PermissionState.Deny; return; }
-        if (e.PermissionKind == CoreWebView2PermissionKind.Geolocation && p.LocationPermission == PermissionPolicy.Deny) e.State = CoreWebView2PermissionState.Deny;
+        if (e.PermissionKind == CoreWebView2PermissionKind.Geolocation)
+            e.State = p.LocationPermission == LocationPolicy.Deny ? CoreWebView2PermissionState.Deny : CoreWebView2PermissionState.Allow;
         if ((e.PermissionKind == CoreWebView2PermissionKind.Camera || e.PermissionKind == CoreWebView2PermissionKind.Microphone) && p.CameraMicrophonePermission == PermissionPolicy.Deny) e.State = CoreWebView2PermissionState.Deny;
     }
+
+    private async Task OnWebMessageReceivedAsync(CoreWebView2 core, BrowserTabViewModel tab, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            using var message = JsonDocument.Parse(e.WebMessageAsJson);
+            var root = message.RootElement;
+            if (!root.TryGetProperty("kind", out var kind) || kind.GetString() != "zzz-geolocation") return;
+            var id = root.GetProperty("id").GetInt32();
+            var privacy = _settings.Current.Privacy;
+            var allowed = privacy.LocationPermission != LocationPolicy.Deny;
+            var latitude = privacy.CustomLatitude;
+            var longitude = privacy.CustomLongitude;
+            var accuracy = privacy.CustomLocationAccuracy;
+            if (privacy.LocationPermission == LocationPolicy.Ask)
+            {
+                var dialog = new LocationRequestWindow(tab.Title, tab.Url, latitude, longitude, accuracy)
+                {
+                    Owner = Application.Current.MainWindow
+                };
+                allowed = dialog.ShowDialog() == true && dialog.AllowLocation;
+                latitude = dialog.Latitude;
+                longitude = dialog.Longitude;
+                accuracy = dialog.Accuracy;
+            }
+            var reply = JsonSerializer.Serialize(new { kind = "zzz-geolocation-reply", id, allowed, latitude, longitude, accuracy = Math.Max(1, accuracy), timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
+            core.PostWebMessageAsJson(reply);
+            await Task.CompletedTask;
+        }
+        catch { }
+    }
+
+    private const string LocationBootstrap = @"(() => {
+const geo = navigator.geolocation;
+if (!geo) return;
+let seq = 0, watchSeq = 0; const pending = new Map(), watches = new Map();
+const makePosition = x => Object.freeze({coords:Object.freeze({latitude:x.latitude,longitude:x.longitude,accuracy:x.accuracy,altitude:null,altitudeAccuracy:null,heading:null,speed:null}),timestamp:x.timestamp});
+const request = (ok, fail, watch) => { const id=++seq; pending.set(id,{ok,fail,watch}); chrome.webview.postMessage({kind:'zzz-geolocation',id}); return id; };
+chrome.webview.addEventListener('message', e => { const x=e.data; if(!x || x.kind!=='zzz-geolocation-reply')return; const p=pending.get(x.id); if(!p)return; pending.delete(x.id); if(x.allowed){try{p.ok(makePosition(x));}catch{}}else if(p.fail){try{p.fail(Object.freeze({code:1,message:'User denied Geolocation'}));}catch{}} });
+const get = function(success,error){ if(typeof success!=='function') throw new TypeError('Callback must be a function'); request(success,error,false); };
+const watch = function(success,error){ if(typeof success!=='function') throw new TypeError('Callback must be a function'); const wid=++watchSeq; const ask=()=>{if(!watches.has(wid))return; request(x=>{success(x);},error,true);}; watches.set(wid,ask); ask(); return wid; };
+const clear = function(id){ watches.delete(Number(id)); };
+try{Object.defineProperties(geo,{getCurrentPosition:{value:get,configurable:true},watchPosition:{value:watch,configurable:true},clearWatch:{value:clear,configurable:true}});}catch{}
+})();";
 
     private static string ResolveUserAgent(BrowserSettings settings) => settings.UserAgent switch
     {

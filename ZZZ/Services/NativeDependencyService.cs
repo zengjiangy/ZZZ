@@ -10,7 +10,12 @@ internal static class NativeDependencyService
 
     public static void PrepareWebView2Loader()
     {
-        var architecture = Environment.Is64BitProcess ? "x64" : "x86";
+        var architecture = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.Arm64 => "arm64",
+            Architecture.X64 => "x64",
+            _ => "x86"
+        };
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "current";
         var directory = Path.Combine(AppPaths.Root, "Native", version, architecture);
         var path = Path.Combine(directory, "WebView2Loader.dll");

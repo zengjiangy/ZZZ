@@ -20,7 +20,7 @@
     <Grid Background="{DynamicResource WindowBrush}">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="2"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Height="44" Background="{DynamicResource ChromeBrush}" Visibility="{Binding Services.Settings.Current.Ui.ShowTabBar, Converter={StaticResource BoolVisibility}}">
+        <Border x:Name="TabBar" Grid.Row="0" Height="44" Background="{DynamicResource ChromeBrush}" Visibility="{Binding Services.Settings.Current.Ui.ShowTabBar, Converter={StaticResource BoolVisibility}}">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
                 <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource AccentBrush}" ToolTip="{DynamicResource AppName}">
@@ -57,7 +57,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="1" Margin="9,7,9,8" Padding="5" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="13"
+        <Border x:Name="Toolbar" Grid.Row="1" Margin="9,7,9,8" Padding="5" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="13"
                 Visibility="{Binding Services.Settings.Current.Ui.ShowToolbar, Converter={StaticResource BoolVisibility}}">
             <Border.Effect><DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.10" Color="#40000000"/></Border.Effect>
             <Grid>
@@ -84,7 +84,18 @@
         </Border>
 
         <ProgressBar Grid.Row="2" Height="2" IsIndeterminate="True" Foreground="{DynamicResource AccentBrush}" Background="Transparent" Visibility="{Binding SelectedTab.IsLoading, Converter={StaticResource BoolVisibility}}"/>
-        <Border Grid.Row="3" Background="{DynamicResource WebBackdropBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0"><ContentControl x:Name="TabContentHost"/></Border>
-        <Border Grid.Row="4" Background="{DynamicResource ChromeBrush}"><TextBlock Text="{Binding SelectedTab.Status}" Foreground="{DynamicResource MutedBrush}" Margin="12,4" FontSize="11" TextTrimming="CharacterEllipsis"/></Border>
+        <Border Grid.Row="3" Background="{DynamicResource WebBackdropBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid x:Name="BrowserArea"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="SplitterColumn" Width="0"/><ColumnDefinition x:Name="SecondaryColumn" Width="0"/></Grid.ColumnDefinitions>
+                    <ContentControl x:Name="TabContentHost"/>
+                    <GridSplitter x:Name="SplitDivider" Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource LineBrush}" Visibility="Collapsed"/>
+                    <ContentControl x:Name="SecondaryTabContentHost" Grid.Column="2"/>
+                </Grid>
+                <Border x:Name="FindBar" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Padding="7" CornerRadius="11" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal"><TextBox x:Name="FindBox" Width="230" Padding="10,6" KeyDown="FindBox_KeyDown"/><Button Content="↑" Click="FindPrevious_Click" ToolTip="{DynamicResource FindPrevious}"/><Button Content="↓" Click="FindNext_Click" ToolTip="{DynamicResource FindNext}"/><Button Content="×" Click="CloseFind_Click" ToolTip="{DynamicResource Close}"/></StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+        <Border x:Name="StatusBar" Grid.Row="4" Background="{DynamicResource ChromeBrush}"><TextBlock Text="{Binding SelectedTab.Status}" Foreground="{DynamicResource MutedBrush}" Margin="12,4" FontSize="11" TextTrimming="CharacterEllipsis"/></Border>
     </Grid>
 </Window>

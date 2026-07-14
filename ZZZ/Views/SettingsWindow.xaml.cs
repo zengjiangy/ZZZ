@@ -23,7 +23,9 @@ public partial class SettingsWindow : Window
         AppearanceBox.ItemsSource = new[] { Choice(AppearanceMode.System, "FollowSystem"), Choice(AppearanceMode.Light, "Light"), Choice(AppearanceMode.Dark, "Dark") };
         StartupPageModeBox.ItemsSource = new[] { Choice(StartupPageMode.StartPage, "BuiltInStartPage"), Choice(StartupPageMode.SearchEngineWebsite, "SearchEngineWebsite") };
         WebDarkModeBox.ItemsSource = new[] { Choice(WebContentDarkMode.Smart, "DarkSmart"), Choice(WebContentDarkMode.Force, "DarkForce") };
-        LocationBox.ItemsSource = MediaPermissionBox.ItemsSource = new[] { Choice(PermissionPolicy.Ask, "Ask"), Choice(PermissionPolicy.Deny, "Deny") };
+        LocationBox.ItemsSource = new[] { Choice(LocationPolicy.Ask, "AskCustomLocation"), Choice(LocationPolicy.Custom, "AlwaysCustomLocation"), Choice(LocationPolicy.Deny, "Deny") };
+        MediaPermissionBox.ItemsSource = new[] { Choice(PermissionPolicy.Ask, "Ask"), Choice(PermissionPolicy.Deny, "Deny") };
+        BookmarkStyleBox.ItemsSource = new[] { Choice(BookmarkTileStyle.Compact, "BookmarkCompact"), Choice(BookmarkTileStyle.Rounded, "BookmarkRounded"), Choice(BookmarkTileStyle.Card, "BookmarkCard") };
         UserAgentBox.ItemsSource = new[] { Choice(UserAgentPreset.DefaultDesktop, "DefaultDesktop"), Choice(UserAgentPreset.AndroidMobile, "AndroidMobile"), Choice(UserAgentPreset.IPad, "IPad"), Choice(UserAgentPreset.Custom, "Custom") };
         TranslationProviderBox.ItemsSource = new[] { Choice(TranslationProvider.Google, "GoogleTranslate"), Choice(TranslationProvider.Microsoft, "MicrosoftTranslate") };
         DownloadModeBox.ItemsSource = new[] { Choice(DownloadMode.BuiltIn, "BuiltIn"), Choice(DownloadMode.External, "External") };
@@ -70,6 +72,12 @@ public partial class SettingsWindow : Window
         if (dialog.ShowDialog() != true) return;
         _pendingBackgroundSource = dialog.FileName;
         BackgroundImageBox.Text = dialog.FileName;
+    }
+    private void ResetBackground_Click(object sender, RoutedEventArgs e)
+    {
+        _pendingBackgroundSource = string.Empty;
+        _working.StartPage.BackgroundImage = string.Empty;
+        BackgroundImageBox.Text = string.Empty;
     }
     private void BrowseDataPath_Click(object sender, RoutedEventArgs e)
     {

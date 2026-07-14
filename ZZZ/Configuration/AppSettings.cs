@@ -3,6 +3,9 @@ namespace ZZZ.Configuration;
 public enum AppearanceMode { System, Light, Dark }
 public enum UserAgentPreset { DefaultDesktop, AndroidMobile, IPad, Custom }
 public enum PermissionPolicy { Ask, Deny }
+// Numeric values preserve 1.x JSON where PermissionPolicy.Deny was 1.
+public enum LocationPolicy { Ask = 0, Deny = 1, Custom = 2 }
+public enum BookmarkTileStyle { Compact, Rounded, Card }
 public enum DownloadMode { BuiltIn, External }
 public enum WebContentDarkMode { Off, Smart, Force }
 public enum TranslationProvider { Google, Microsoft }
@@ -42,7 +45,10 @@ public sealed class PrivacySettings
     public bool BlockThirdPartyCookies { get; set; } = true;
     public bool SendGlobalPrivacyControl { get; set; } = true;
     public bool StrictPrivateTabs { get; set; } = true;
-    public PermissionPolicy LocationPermission { get; set; } = PermissionPolicy.Ask;
+    public LocationPolicy LocationPermission { get; set; } = LocationPolicy.Ask;
+    public double CustomLatitude { get; set; } = 31.2304;
+    public double CustomLongitude { get; set; } = 121.4737;
+    public double CustomLocationAccuracy { get; set; } = 30;
     public PermissionPolicy CameraMicrophonePermission { get; set; } = PermissionPolicy.Ask;
     public bool ClearOnExit { get; set; }
     public ClearDataSelection ClearOnExitItems { get; set; } = new();
@@ -74,6 +80,8 @@ public sealed class StartPageSettings
     public string BackgroundImage { get; set; } = string.Empty;
     public double BackgroundOpacity { get; set; } = 1.0;
     public bool ShowBookmarks { get; set; } = true;
+    public BookmarkTileStyle BookmarkStyle { get; set; } = BookmarkTileStyle.Rounded;
+    public double BookmarkTileWidth { get; set; } = 160;
 }
 
 public sealed class StorageSettings

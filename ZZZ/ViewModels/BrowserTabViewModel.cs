@@ -6,6 +6,8 @@ using Microsoft.Web.WebView2.Core;
 using ZZZ.Models;
 using ZZZ.Services;
 using ZZZ.Configuration;
+using Microsoft.Win32;
+using System.Text.Json;
 
 namespace ZZZ.ViewModels;
 
@@ -178,4 +180,51 @@ public partial class BrowserTabViewModel : ObservableObject
     private static bool IsGoogleTranslationPage(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
         (uri.Host.Equals("translate.google.com", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".translate.goog", StringComparison.OrdinalIgnoreCase));
     [RelayCommand] private void OpenDevTools() { if (_services.Settings.Current.Advanced.EnableDeveloperTools) _view?.CoreWebView2?.OpenDevToolsWindow(); }
+
+    public void Print() => _view?.CoreWebView2?.ShowPrintUI(CoreWebView2PrintDialogKind.System);
+
+    public async Task SaveAsPdfAsync()
+    {
+        if (_view?.CoreWebView2 is not { } core) return;
+        var dialog = new SaveFileDialog { Filter = "PDF (*.pdf)|*.pdf", FileName = SafeFileName(Title) + ".pdf", AddExtension = true };
+        if (dialog.ShowDialog() != true) return;
+        Status = LocalizationService.Text("SavingPage");
+        try
+        {
+            var success = await core.PrintToPdfAsync(dialog.FileName);
+            Status = success ? string.Format(LocalizationService.Text("PageSaved"), dialog.FileName) : LocalizationService.Text("SavePageFailed");
+        }
+        catch { Status = LocalizationService.Text("SavePageFailed"); }
+    }
+
+    public async Task SaveAsMhtAsync()
+    {
+        if (_view?.CoreWebView2 is not { } core) return;
+        var dialog = new SaveFileDialog { Filter = "Web archive (*.mht)|*.mht", FileName = SafeFileName(Title) + ".mht", AddExtension = true };
+        if (dialog.ShowDialog() != true) return;
+        Status = LocalizationService.Text("SavingPage");
+        try
+        {
+            var response = await core.CallDevToolsProtocolMethodAsync("Page.captureSnapshot", "{\"format\":\"mhtml\"}");
+            using var json = JsonDocument.Parse(response);
+            var data = json.RootElement.GetProperty("data").GetString() ?? string.Empty;
+            File.WriteAllText(dialog.FileName, data, new System.Text.UTF8Encoding(false));
+            Status = string.Format(LocalizationService.Text("PageSaved"), dialog.FileName);
+        }
+        catch { Status = LocalizationService.Text("SavePageFailed"); }
+    }
+
+    public async Task FindAsync(string query, bool backwards)
+    {
+        if (_view?.CoreWebView2 is not { } core || string.IsNullOrWhiteSpace(query)) return;
+        var encoded = JsonSerializer.Serialize(query);
+        await core.ExecuteScriptAsync($"window.find({encoded}, false, {(backwards ? "true" : "false")}, true, false, true, false)");
+    }
+
+    private static string SafeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var safe = new string((string.IsNullOrWhiteSpace(value) ? "page" : value).Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim();
+        return safe.Length > 80 ? safe.Substring(0, 80) : safe;
+    }
 }

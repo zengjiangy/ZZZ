@@ -26,10 +26,18 @@ public partial class LibraryWindow : Window
     }
     private void OpenBookmark_Click(object sender, RoutedEventArgs e) { if (BookmarksGrid.SelectedItem is Bookmark b) { _main.CreateTab(b.Url); Close(); } }
     private async void RemoveBookmark_Click(object sender, RoutedEventArgs e) { if (BookmarksGrid.SelectedItem is Bookmark b) { await _main.Services.Bookmarks.RemoveAsync(b); BookmarksGrid.Items.Refresh(); } }
+    private async void SaveBookmarks_Click(object sender, RoutedEventArgs e) { BookmarksGrid.CommitEdit(); await _main.Services.Bookmarks.SaveAsync(); }
     private async void ImportBookmarks_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "Bookmarks HTML|*.html;*.htm" }; if (d.ShowDialog() == true) { await _main.Services.Bookmarks.ImportHtmlAsync(d.FileName); BookmarksGrid.Items.Refresh(); } }
     private async void ExportBookmarks_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "HTML|*.html", FileName = "zzz-bookmarks.html" }; if (d.ShowDialog() == true) await _main.Services.Bookmarks.ExportHtmlAsync(d.FileName); }
     private void OpenHistory_Click(object sender, RoutedEventArgs e) { if (HistoryGrid.SelectedItem is HistoryEntry h) { _main.CreateTab(h.Url); Close(); } }
-    private async void ClearHistory_Click(object sender, RoutedEventArgs e) { if (!ConfirmSensitive("ClearHistory")) return; await _main.Services.History.ClearAsync(); HistoryGrid.Items.Refresh(); }
+    private void HistoryGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => OpenHistory_Click(sender, e);
+    private async void RemoveHistory_Click(object sender, RoutedEventArgs e) { if (HistoryGrid.SelectedItem is HistoryEntry h) { await _main.Services.History.RemoveAsync(h); HistoryGrid.Items.Refresh(); } }
+    private async void ClearHistory_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ClearDataWindow(new ZZZ.Configuration.ClearDataSelection { History = true, Cache = false, Cookies = false }, true) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        await _main.Services.History.ClearAsync(); HistoryGrid.Items.Refresh();
+    }
     private void NewScript_Click(object sender, RoutedEventArgs e) { var s = new UserScript { Name = "New script", Match = "*", Code = "// Runs after navigation\n" }; _scripts.Add(s); ScriptsGrid.SelectedItem = s; }
     private async void ImportScript_Click(object sender, RoutedEventArgs e)
     {

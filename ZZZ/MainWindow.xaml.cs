@@ -14,6 +14,11 @@ namespace ZZZ;
 public partial class MainWindow : Window
 {
     private readonly Dictionary<BrowserTabViewModel, BrowserTabView> _tabViews = [];
+    private BrowserTabViewModel? _splitTab;
+    private bool _isFullscreen;
+    private WindowState _stateBeforeFullscreen;
+    private WindowStyle _styleBeforeFullscreen;
+    private ResizeMode _resizeBeforeFullscreen;
     private MainViewModel ViewModel => (MainViewModel)DataContext;
 
     public MainWindow()
@@ -34,12 +39,17 @@ public partial class MainWindow : Window
     private void Tabs_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.OldItems is null) return;
-        foreach (BrowserTabViewModel tab in e.OldItems) _tabViews.Remove(tab);
+        foreach (BrowserTabViewModel tab in e.OldItems)
+        {
+            _tabViews.Remove(tab);
+            if (ReferenceEquals(_splitTab, tab)) CloseSplit();
+        }
     }
 
     private void ShowSelectedTab(BrowserTabViewModel? tab)
     {
         if (tab is null) { TabContentHost.Content = null; return; }
+        if (ReferenceEquals(tab, _splitTab)) CloseSplit();
         if (!_tabViews.TryGetValue(tab, out var view)) { view = new BrowserTabView { DataContext = tab }; _tabViews[tab] = view; }
         TabContentHost.Content = view;
     }
@@ -72,9 +82,12 @@ public partial class MainWindow : Window
         else if (ctrl && e.Key == Key.W && ViewModel.SelectedTab is not null) { ViewModel.CloseTabCommand.Execute(ViewModel.SelectedTab); e.Handled = true; }
         else if ((ctrl && e.Key == Key.L) || (alt && e.Key == Key.D)) { AddressBox.Focus(); AddressBox.SelectAll(); e.Handled = true; }
         else if (ctrl && e.Key == Key.R) { ViewModel.SelectedTab?.ReloadCommand.Execute(null); e.Handled = true; }
+        else if (ctrl && e.Key == Key.P) { ViewModel.SelectedTab?.Print(); e.Handled = true; }
+        else if (ctrl && e.Key == Key.F) { ShowFind(); e.Handled = true; }
         else if (alt && e.Key == Key.Left) { ViewModel.SelectedTab?.BackCommand.Execute(null); e.Handled = true; }
         else if (alt && e.Key == Key.Right) { ViewModel.SelectedTab?.ForwardCommand.Execute(null); e.Handled = true; }
         else if (e.Key == Key.F12) { ViewModel.SelectedTab?.OpenDevToolsCommand.Execute(null); e.Handled = true; }
+        else if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; }
     }
 
     private void MenuButton_Click(object sender, RoutedEventArgs e)
@@ -85,6 +98,13 @@ public partial class MainWindow : Window
         menu.Items.Add(Item(LocalizationService.Text("NewPrivateTab"), (_, _) => ViewModel.CreateTab(home, true), "Ctrl+Shift+N"));
         menu.Items.Add(Item(LocalizationService.Text("Library"), (_, _) => new LibraryWindow(ViewModel).ShowDialog()));
         menu.Items.Add(Item(LocalizationService.Text("Downloads"), (_, _) => new DownloadsWindow(ViewModel.Services.Downloads).Show()));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item(LocalizationService.Text("SaveAsPdf"), async (_, _) => await (ViewModel.SelectedTab?.SaveAsPdfAsync() ?? Task.CompletedTask)));
+        menu.Items.Add(Item(LocalizationService.Text("SaveAsMht"), async (_, _) => await (ViewModel.SelectedTab?.SaveAsMhtAsync() ?? Task.CompletedTask)));
+        menu.Items.Add(Item(LocalizationService.Text("Print"), (_, _) => ViewModel.SelectedTab?.Print(), "Ctrl+P"));
+        menu.Items.Add(Item(LocalizationService.Text("FindInPage"), (_, _) => ShowFind(), "Ctrl+F"));
+        menu.Items.Add(BuildSplitMenu());
+        menu.Items.Add(Item(LocalizationService.Text("Fullscreen"), (_, _) => ToggleFullscreen(), "F11"));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item(LocalizationService.Text("DeveloperTools"), (_, _) => ViewModel.SelectedTab?.OpenDevToolsCommand.Execute(null), "F12"));
         menu.Items.Add(Item(LocalizationService.Text("ClearBrowsingData"), async (_, _) => await ClearBrowsingDataAsync()));
@@ -127,9 +147,8 @@ public partial class MainWindow : Window
     {
         var dialog = new ClearDataWindow(ViewModel.Services.Settings.Current.Privacy.ClearOnExitItems) { Owner = this };
         if (dialog.ShowDialog() != true) return;
-        if (MessageBox.Show(this, LocalizationService.Text("ClearDataFinalConfirm"), LocalizationService.Text("ClearDataTitle"), MessageBoxButton.YesNo, MessageBoxImage.Stop) != MessageBoxResult.Yes) return;
         await ViewModel.Services.Privacy.ClearAsync(dialog.Selection);
-        MessageBox.Show(this, LocalizationService.Text("ClearComplete"), LocalizationService.Text("ClearDataTitle"), MessageBoxButton.OK, MessageBoxImage.Information);
+        ViewModel.SelectedTab!.Status = LocalizationService.Text("ClearComplete");
     }
 
     private void MediaButton_Click(object sender, RoutedEventArgs e)
@@ -154,4 +173,81 @@ public partial class MainWindow : Window
     }
 
     private async void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e) => await ViewModel.Services.Settings.SaveAsync();
+
+    private MenuItem BuildSplitMenu()
+    {
+        var split = new MenuItem { Header = LocalizationService.Text("SplitScreen") };
+        foreach (var tab in ViewModel.Tabs.Where(x => !ReferenceEquals(x, ViewModel.SelectedTab)))
+        {
+            var item = new MenuItem { Header = tab.Title, ToolTip = tab.Url, IsCheckable = true, IsChecked = ReferenceEquals(tab, _splitTab) };
+            item.Click += (_, _) => OpenSplit(tab);
+            split.Items.Add(item);
+        }
+        if (_splitTab is not null)
+        {
+            split.Items.Add(new Separator());
+            split.Items.Add(Item(LocalizationService.Text("CloseSplit"), (_, _) => CloseSplit()));
+        }
+        if (split.Items.Count == 0)
+        {
+            split.Items.Add(Item(LocalizationService.Text("OpenNewSplit"), (_, _) =>
+            {
+                var primary = ViewModel.SelectedTab;
+                ViewModel.CreateTab(BrowserHome.GetHomeUrl(ViewModel.Services.Settings.Current));
+                var created = ViewModel.SelectedTab;
+                ViewModel.SelectedTab = primary;
+                if (created is not null) OpenSplit(created);
+            }));
+        }
+        return split;
+    }
+
+    private void OpenSplit(BrowserTabViewModel tab)
+    {
+        _splitTab = tab;
+        if (!_tabViews.TryGetValue(tab, out var view)) { view = new BrowserTabView { DataContext = tab }; _tabViews[tab] = view; }
+        SecondaryTabContentHost.Content = view;
+        SplitterColumn.Width = new GridLength(5);
+        SecondaryColumn.Width = new GridLength(1, GridUnitType.Star);
+        SplitDivider.Visibility = Visibility.Visible;
+    }
+
+    private void CloseSplit()
+    {
+        _splitTab = null;
+        SecondaryTabContentHost.Content = null;
+        SplitterColumn.Width = new GridLength(0);
+        SecondaryColumn.Width = new GridLength(0);
+        SplitDivider.Visibility = Visibility.Collapsed;
+    }
+
+    private void ToggleFullscreen()
+    {
+        _isFullscreen = !_isFullscreen;
+        if (_isFullscreen)
+        {
+            _stateBeforeFullscreen = WindowState;
+            _styleBeforeFullscreen = WindowStyle;
+            _resizeBeforeFullscreen = ResizeMode;
+            TabBar.Visibility = Toolbar.Visibility = StatusBar.Visibility = Visibility.Collapsed;
+            WindowState = WindowState.Normal; WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; WindowState = WindowState.Maximized;
+        }
+        else
+        {
+            WindowState = WindowState.Normal; WindowStyle = _styleBeforeFullscreen; ResizeMode = _resizeBeforeFullscreen; WindowState = _stateBeforeFullscreen;
+            TabBar.Visibility = ViewModel.Services.Settings.Current.Ui.ShowTabBar ? Visibility.Visible : Visibility.Collapsed;
+            Toolbar.Visibility = ViewModel.Services.Settings.Current.Ui.ShowToolbar ? Visibility.Visible : Visibility.Collapsed;
+            StatusBar.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void ShowFind() { FindBar.Visibility = Visibility.Visible; FindBox.Focus(); FindBox.SelectAll(); }
+    private void CloseFind_Click(object sender, RoutedEventArgs e) => FindBar.Visibility = Visibility.Collapsed;
+    private async void FindNext_Click(object sender, RoutedEventArgs e) => await (ViewModel.SelectedTab?.FindAsync(FindBox.Text, false) ?? Task.CompletedTask);
+    private async void FindPrevious_Click(object sender, RoutedEventArgs e) => await (ViewModel.SelectedTab?.FindAsync(FindBox.Text, true) ?? Task.CompletedTask);
+    private async void FindBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape) { FindBar.Visibility = Visibility.Collapsed; e.Handled = true; return; }
+        if (e.Key == Key.Enter) { await (ViewModel.SelectedTab?.FindAsync(FindBox.Text, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) ?? Task.CompletedTask); e.Handled = true; }
+    }
 }

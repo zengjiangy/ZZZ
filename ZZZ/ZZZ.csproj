@@ -5,7 +5,7 @@
     <TargetFramework>net48</TargetFramework>
     <AssemblyName>ZZZ</AssemblyName>
     <RootNamespace>ZZZ</RootNamespace>
-    <Version>1.2.5</Version>
+    <Version>1.5.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\zzz.ico</ApplicationIcon>
     <LangVersion>latest</LangVersion>
@@ -34,6 +34,7 @@
     <None Include="Assets\zzz.svg" />
     <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\build\native\x86\WebView2Loader.dll" LogicalName="ZZZ.Native.x86.WebView2Loader.dll" />
     <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\build\native\x64\WebView2Loader.dll" LogicalName="ZZZ.Native.x64.WebView2Loader.dll" />
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\build\native\arm64\WebView2Loader.dll" LogicalName="ZZZ.Native.arm64.WebView2Loader.dll" />
   </ItemGroup>
 
 </Project>

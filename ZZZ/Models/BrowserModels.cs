@@ -7,6 +7,7 @@ public sealed class Bookmark
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public bool ShowOnStartPage { get; set; } = true;
 }
 
 public sealed class HistoryEntry

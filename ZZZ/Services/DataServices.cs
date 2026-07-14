@@ -202,6 +202,7 @@ public interface IBookmarkService
     Task LoadAsync();
     Task AddAsync(string title, string url);
     Task RemoveAsync(Bookmark item);
+    Task SaveAsync();
     Task<bool> ToggleAsync(string title, string url);
     bool Contains(string url);
     Task ExportHtmlAsync(string path);
@@ -224,6 +225,11 @@ public sealed class BookmarkService : IBookmarkService
     public async Task RemoveAsync(Bookmark item)
     {
         if (!_items.Remove(item)) return;
+        await JsonFiles.SaveAsync(AppPaths.Bookmarks, _items);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+    public async Task SaveAsync()
+    {
         await JsonFiles.SaveAsync(AppPaths.Bookmarks, _items);
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -275,6 +281,7 @@ public interface IHistoryService
     IReadOnlyList<HistoryEntry> Items { get; }
     Task LoadAsync();
     Task AddAsync(string title, string url);
+    Task RemoveAsync(HistoryEntry item);
     Task ClearAsync();
 }
 
@@ -289,6 +296,10 @@ public sealed class HistoryService : IHistoryService
         _items.Insert(0, new HistoryEntry { Title = title, Url = url });
         if (_items.Count > 3000) _items.RemoveRange(3000, _items.Count - 3000);
         await JsonFiles.SaveAsync(AppPaths.History, _items);
+    }
+    public async Task RemoveAsync(HistoryEntry item)
+    {
+        if (_items.Remove(item)) await JsonFiles.SaveAsync(AppPaths.History, _items);
     }
     public async Task ClearAsync() { _items.Clear(); await JsonFiles.SaveAsync(AppPaths.History, _items); }
 }

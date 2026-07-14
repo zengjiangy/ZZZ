@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ZZZ.Services;
 using ZZZ.ViewModels;
+using ZZZ.Configuration;
 
 namespace ZZZ.Views;
 
@@ -143,7 +144,22 @@ public partial class StartPageView : UserControl
     }
 
     private void Bookmarks_Changed(object? sender, EventArgs e) => Dispatcher.BeginInvoke(new Action(RefreshBookmarks));
-    private void RefreshBookmarks() => BookmarksList.ItemsSource = App.Services.Bookmarks.Items.Take(24).ToArray();
+    private void RefreshBookmarks()
+    {
+        var settings = App.Services.Settings.Current.StartPage;
+        var width = Math.Max(100, Math.Min(260, settings.BookmarkTileWidth));
+        BookmarksList.ItemsSource = App.Services.Bookmarks.Items.Where(x => x.ShowOnStartPage).Take(24).Select(x => new StartBookmark
+        {
+            Title = x.Title,
+            Url = x.Url,
+            DisplayUrl = Uri.TryCreate(x.Url, UriKind.Absolute, out var uri) ? uri.Host : x.Url,
+            TileWidth = width,
+            TileHeight = settings.BookmarkStyle == BookmarkTileStyle.Card ? 72 : settings.BookmarkStyle == BookmarkTileStyle.Compact ? 38 : 48,
+            TilePadding = settings.BookmarkStyle == BookmarkTileStyle.Compact ? new Thickness(9, 4, 9, 4) : new Thickness(14, 8, 14, 8),
+            TitleSize = settings.BookmarkStyle == BookmarkTileStyle.Card ? 14 : 12,
+            ShowUrl = settings.BookmarkStyle == BookmarkTileStyle.Card
+        }).ToArray();
+    }
 
     private void SearchBox_KeyDown(object sender, KeyEventArgs e)
     {
@@ -155,5 +171,17 @@ public partial class StartPageView : UserControl
     private void Bookmark_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string url }) _tab.NavigateText(url);
+    }
+
+    private sealed class StartBookmark
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Url { get; set; } = string.Empty;
+        public string DisplayUrl { get; set; } = string.Empty;
+        public double TileWidth { get; set; }
+        public double TileHeight { get; set; }
+        public Thickness TilePadding { get; set; }
+        public double TitleSize { get; set; }
+        public bool ShowUrl { get; set; }
     }
 }
