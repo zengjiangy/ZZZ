@@ -9,6 +9,8 @@ namespace ZZZ.Services;
 public interface ITranslationService
 {
     Task<int> TranslatePageAsync(CoreWebView2 core, string targetLanguage);
+    Task<int> RestorePageAsync(CoreWebView2 core);
+    Task<bool> IsPageTranslatedAsync(CoreWebView2 core);
     Task<bool> ShouldAutoTranslateAsync(CoreWebView2 core, string targetLanguage);
 }
 
@@ -22,7 +24,7 @@ public sealed class TranslationService : ITranslationService, IDisposable
     private const string EdgeUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0";
     private const string CollectScript = """
         (() => {
-          const result = [], refs = [];
+          const result = [], refs = [], originals = [];
           if (!document.body) return result;
           const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
             acceptNode(node) {
@@ -39,10 +41,11 @@ public sealed class TranslationService : ITranslationService, IDisposable
             if (total + text.length > 60000) break;
             const id = result.length;
             refs[id] = node;
+            originals[id] = text;
             result.push({ id, text });
             total += text.length;
           }
-          window.__zzzTranslationNodes = refs;
+          window.__zzzTranslationState = { refs, originals, translated: false };
           return result;
         })()
         """;
@@ -90,10 +93,48 @@ public sealed class TranslationService : ITranslationService, IDisposable
             foreach (var batch in Batch(translated, 100, int.MaxValue))
             {
                 var json = JsonSerializer.Serialize(batch, JsonOptions);
-                await core.ExecuteScriptAsync($"(() => {{ const updates={json}, refs=window.__zzzTranslationNodes||[]; for (const item of updates) {{ const node=refs[item.id]; if (node && node.isConnected) node.nodeValue=item.text; }} }})()");
+                await core.ExecuteScriptAsync($"(() => {{ const updates={json}, state=window.__zzzTranslationState; if (!state) return; for (const item of updates) {{ const node=state.refs[item.id]; if (node && node.isConnected) node.nodeValue=item.text; }} }})()");
             }
+            await core.ExecuteScriptAsync("if (window.__zzzTranslationState) window.__zzzTranslationState.translated = true");
             return translated.Count;
         }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<bool> IsPageTranslatedAsync(CoreWebView2 core)
+    {
+        try
+        {
+            var raw = await core.ExecuteScriptAsync("Boolean(window.__zzzTranslationState && window.__zzzTranslationState.translated)");
+            return JsonSerializer.Deserialize<bool>(raw);
+        }
+        catch { return false; }
+    }
+
+    public async Task<int> RestorePageAsync(CoreWebView2 core)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var raw = await core.ExecuteScriptAsync("""
+                (() => {
+                  const state = window.__zzzTranslationState;
+                  if (!state || !state.translated) return 0;
+                  let restored = 0;
+                  for (let i = 0; i < state.refs.length; i++) {
+                    const node = state.refs[i];
+                    if (node && node.isConnected) {
+                      node.nodeValue = state.originals[i];
+                      restored++;
+                    }
+                  }
+                  state.translated = false;
+                  return restored;
+                })()
+                """);
+            return JsonSerializer.Deserialize<int>(raw);
+        }
+        catch { return 0; }
         finally { _gate.Release(); }
     }
 

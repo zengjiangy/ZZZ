@@ -2,7 +2,7 @@
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF、MVVM 和 Microsoft WebView2。它使用系统安装的 WebView2 Runtime，不额外捆绑 Chromium，并支持将全部浏览数据放在 EXE 同目录以便 U 盘携带。
 
-当前版本：**1.2**。
+当前版本：**1.2.1**。
 
 ## Download
 
@@ -42,7 +42,7 @@ Open **Library → Userscripts** to create a script or import a `.user.js` file.
 
 ## 网页翻译
 
-点击地址栏旁的 **译**。默认的微软方案以 Edge 请求身份获取短期令牌，在当前页面内分批翻译文本，不跳转到地区受限的代理页；Google 方案仍可选，并只在翻译页使用 Chrome 兼容身份。目标语言和自动翻译开关位于 **设置 → 高级**。
+点击地址栏旁的 **译**。默认的微软方案以 Edge 请求身份获取短期令牌，在当前页面内分批翻译文本，不跳转到地区受限的代理页；翻译完成后再次点击 **译** 即可恢复原文，再次点击可重新翻译。Google 方案同样支持再次点击返回原网站。目标语言和自动翻译开关位于 **设置 → 高级**。
 
 ## 便携模式
 

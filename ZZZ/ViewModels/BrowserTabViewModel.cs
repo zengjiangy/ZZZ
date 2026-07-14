@@ -13,6 +13,7 @@ public partial class BrowserTabViewModel : ObservableObject
 {
     private readonly AppServices _services;
     private WebView2? _view;
+    private string _googleTranslationOriginalUrl = string.Empty;
     [ObservableProperty] private string id = Guid.NewGuid().ToString("N");
     [ObservableProperty] private string title = "New tab";
     [ObservableProperty] private string url;
@@ -162,6 +163,15 @@ public partial class BrowserTabViewModel : ObservableObject
         var targetLanguage = string.IsNullOrWhiteSpace(browser.TranslationTargetLanguage) ? "zh-CN" : browser.TranslationTargetLanguage.Trim();
         if (browser.TranslationProvider == TranslationProvider.Google)
         {
+            if (IsGoogleTranslationPage(Url) && !string.IsNullOrWhiteSpace(_googleTranslationOriginalUrl))
+            {
+                Address = _googleTranslationOriginalUrl;
+                _googleTranslationOriginalUrl = string.Empty;
+                NavigateAddress();
+                Status = LocalizationService.Text("OriginalRestored");
+                return;
+            }
+            _googleTranslationOriginalUrl = source.AbsoluteUri;
             Address = $"https://translate.google.com/translate?sl=auto&tl={Uri.EscapeDataString(targetLanguage)}&u={Uri.EscapeDataString(source.AbsoluteUri)}";
             NavigateAddress();
             return;
@@ -169,11 +179,19 @@ public partial class BrowserTabViewModel : ObservableObject
         if (_view?.CoreWebView2 is not { } core) return;
         try
         {
+            if (await _services.Translation.IsPageTranslatedAsync(core))
+            {
+                var restored = await _services.Translation.RestorePageAsync(core);
+                Status = restored > 0 ? LocalizationService.Text("OriginalRestored") : LocalizationService.Text("NothingToTranslate");
+                return;
+            }
             Status = LocalizationService.Text("Translating");
             var count = await _services.Translation.TranslatePageAsync(core, targetLanguage);
             Status = count > 0 ? LocalizationService.Text("TranslationComplete") : LocalizationService.Text("NothingToTranslate");
         }
         catch { Status = LocalizationService.Text("TranslationFailed"); }
     }
+    private static bool IsGoogleTranslationPage(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        (uri.Host.Equals("translate.google.com", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".translate.goog", StringComparison.OrdinalIgnoreCase));
     [RelayCommand] private void OpenDevTools() { if (_services.Settings.Current.Advanced.EnableDeveloperTools) _view?.CoreWebView2?.OpenDevToolsWindow(); }
 }
