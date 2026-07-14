@@ -1,88 +1,124 @@
 # ZZZ 浏览器
 
-ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF、MVVM 和 Microsoft WebView2。它使用系统安装的 WebView2 Runtime，不额外捆绑 Chromium，并支持将全部浏览数据放在 EXE 同目录以便 U 盘携带。
+[简体中文](README.md) | [English](README.en.md)
 
-当前版本：**1.5.3**。
+ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF 和 Microsoft WebView2 构建。它使用系统中的 WebView2 Runtime，不额外捆绑 Chromium，并支持把浏览器数据存放在程序目录中，方便随身携带。
 
-## Download
+当前版本：**1.5.3**
 
-从 [GitHub Releases](https://github.com/zengjiangy/ZZZ/releases/latest) 下载普通 Windows 单文件版或本次提供的 Windows ARM64 单文件版。无需 .NET 8 Desktop Runtime；系统需提供 .NET Framework 4.8 和 Microsoft Edge WebView2 Evergreen Runtime。
+## 下载与运行
+
+请从 [GitHub Releases](https://github.com/zengjiangy/ZZZ/releases/latest) 下载：
+
+| 文件 | 适用平台 |
+|---|---|
+| `ZZZ.exe` | 普通 Windows 版本，推荐 x64 设备使用 |
+| `ZZZ-v1.5.3-win-arm64.exe` | Windows ARM64 原生版本 |
+
+下载后直接运行即可，无需安装。系统需要：
+
+- Windows 10 或 Windows 11
+- .NET Framework 4.8
+- [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+
+WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://github.com/microsoft/winget-pkgs/pull/402023) 审核中。
 
 ## 主要功能
 
-- 原生低开销启动页，仅包含搜索/地址输入框和可选书签，不启动 WebView2；支持纯色、图片与动态 GIF 背景
-- 可选择以内置启动页或当前搜索引擎网站作为主页
-- 多标签页、复制标签、关闭其他/右侧标签及后台标签休眠
-- 支持自适应左右/上下双页面分屏、各窗格独立缩放、快捷关闭、F11 沉浸式全屏，以及 `Ctrl+F` 页内查找
-- 可打印当前网页，并将完整页面保存为 PDF 或 MHT 网页归档
-- 地址/搜索合一，输入时即时匹配本地历史，并为 Bing、Google、百度、DuckDuckGo 提供防抖在线搜索联想；支持自定义搜索模板
-- Typed settings for appearance, interface visibility, privacy, user-agent, downloads, and advanced features
-- Request/response media sniffing by URL, MIME type, HLS/DASH manifest, and content metadata
-- Tampermonkey-style userscripts with metadata import, run timing, match/exclude rules, `@require`, resources, persistent values, and common `GM_*` APIs
-- 微软 Edge 风格页内翻译、Google Chrome 兼容代理翻译，以及语言不一致时自动翻译
-- Unified application and website light/dark themes, with Smart and Force web rendering strengths
-- Runtime-switchable English, Simplified Chinese, Traditional Chinese, and Japanese interface resources
-- DNT、GPC、平衡式第三方跟踪 Cookie 限制、WebRTC 限制及可配置站点权限；位置请求可逐次或始终返回自定义坐标
-- Bookmark HTML import/export (including folder groups), history, settings backup/restore, rule import/export, and modern in-app browsing-data cleanup
-- 书签支持分组编辑和筛选，主页按组展示；每条书签可单独选择是否出现在主页，并可统一调整主页书签的样式和宽度
-- 历史记录支持双击直接打开、删除单条记录或清空全部记录
-- Reactive bookmark indicator with click-to-add/remove behavior
-- Strict private tabs backed by unique InPrivate profiles in a separate per-session temporary WebView2 environment
-- 内置下载管理器显示文件大小、传输进度、MIME、开始/完成时间、状态及保存位置，支持双击打开；也可配置外部下载器和媒体播放器，并提示 Cookie 鉴权资源优先使用内置下载
-- 本机 AppData、EXE 同目录便携模式或自定义数据/Cookie 路径，并支持重启迁移
-- SVG 多分辨率图标与上次会话恢复
-- A single shared browser instance accepts URLs from later launches; inactive tabs request WebView2's low-memory mode
+### 浏览与界面
 
-## Private tabs
+- 多标签页、复制标签页、恢复最近关闭页面，以及关闭其他或右侧标签页
+- 左右或上下分屏浏览，支持各窗格独立缩放和 `Ctrl+Shift+W` 快速退出分屏
+- 地址栏统一处理网址与搜索，支持历史记录匹配和实时搜索联想
+- 原生轻量启动页，可使用纯色、图片或动态 GIF 背景，并按分组展示书签
+- F11 沉浸式全屏、页内查找、打印，以及将网页保存为 PDF 或 MHT
+- 应用和网页明暗主题，可切换简体中文、繁体中文、英语和日语界面
 
-Create one from the main menu or press `Ctrl+Shift+N`. Each private tab uses its own off-the-record WebView2 profile, does not share cookies, cache, or local storage with normal or other private tabs, and is excluded from ZZZ history and session restoration. Closing the tab destroys its temporary web data. Bookmarks and files explicitly saved by the user remain persistent.
+### 书签与数据
 
-Strict private tabs also use a separate per-session temporary WebView2 data directory. Site permissions, autofill, password saving, and persistent HTTP cache are disabled; userscript values remain in memory only. The directory is removed when ZZZ exits, with stale-session cleanup on the next launch as a fallback.
+- 书签分组、编辑和筛选，支持单独控制书签是否显示在主页
+- 导入或导出浏览器书签 HTML，备份和恢复设置、规则与浏览数据
+- 历史记录支持双击打开、删除单条记录和全部清空
+- 数据可存放在本机 AppData、程序目录或自定义路径，并支持迁移
 
-## Userscripts
+### 隐私与权限
 
-Open **Library → Userscripts** to create a script or import a `.user.js` file. ZZZ 1.1 reads standard metadata and supports `document-start`, `document-end`, `document-idle`, `@match`, `@include`, `@exclude`, `@require`, `@resource`, and common legacy/modern `GM_*` APIs. Imported `@require` dependencies are cached with the script so document-start execution does not wait for the network.
+- 独立隐私标签页，不保留历史、会话、缓存、Cookie 或在线搜索联想
+- DNT、GPC、第三方跟踪 Cookie 限制和 WebRTC 限制
+- 可配置摄像头、麦克风、通知、剪贴板和位置等站点权限
+- 支持为位置请求返回自定义坐标
+
+### 网页增强
+
+- 内置微软网页翻译和 Google 兼容代理翻译，可自动翻译语言不一致的页面
+- Tampermonkey 风格用户脚本，支持匹配规则、运行时机、`@require`、资源和常用 `GM_*` API
+- 可切换 User-Agent，并提供智能或强制网页明暗渲染
+- F12 开发者工具可在设置中启用或关闭
+
+### 下载与媒体
+
+- 内置下载管理器显示文件名、大小、进度、MIME 类型、开始及完成时间和保存位置
+- 下载完成后可双击打开文件
+- 可配置外部下载器和媒体播放器
+- 对需要 Cookie 或登录状态鉴权的资源，提示优先使用内置下载
+- 可按 URL、MIME 类型和内容信息识别媒体及 HLS/DASH 清单
+
+## 隐私标签页
+
+通过主菜单或 `Ctrl+Shift+N` 新建隐私标签页。每个隐私标签页使用独立的 WebView2 隐私配置，不与普通标签页或其他隐私标签页共享 Cookie、缓存和本地存储，也不会写入 ZZZ 历史记录或会话恢复数据。
+
+关闭标签页后，其临时网页数据会被删除。用户主动保存的下载文件和书签仍会保留。
 
 ## 网页翻译
 
-点击地址栏旁的 **译**。默认的微软方案以 Edge 请求身份获取短期令牌，在当前页面内分批翻译文本，不跳转到地区受限的代理页；翻译完成后再次点击 **译** 即可恢复原文，再次点击可重新翻译。Google 方案同样支持再次点击返回原网站。目标语言和自动翻译开关位于 **设置 → 高级**。
+点击地址栏旁的“译”即可翻译当前网页。微软方案会在页面内分批翻译文本，不跳转到代理页面；再次点击可恢复原文。翻译目标语言和自动翻译选项位于“设置 → 高级”。
+
+## 用户脚本
+
+打开“库 → 用户脚本”即可新建脚本或导入 `.user.js` 文件。支持 `document-start`、`document-end`、`document-idle`、`@match`、`@include`、`@exclude`、`@require`、`@resource` 和常用 `GM_*` API。
 
 ## 便携模式
 
-在 **设置 → 备份 → 数据与 Cookie 存储位置** 中选择“便携模式”，保存后重启。ZZZ 会在 WebView2 启动前把设置、书签、历史、脚本、Cookie 和缓存迁移到 EXE 同目录的 `Data` 文件夹。移动时请同时复制 `ZZZ.exe`、`Data` 和 `zzz-data-location.json`。
+在“设置 → 备份 → 数据与 Cookie 存储位置”中选择“便携模式”，保存后重启。ZZZ 会把设置、书签、历史、脚本、Cookie 和缓存存放到 EXE 同目录的 `Data` 文件夹。
 
-## Shortcuts
+移动程序时，请一并复制：
 
-| Shortcut | Action |
+- `ZZZ.exe`
+- `Data` 文件夹
+- `zzz-data-location.json`
+
+## 快捷键
+
+| 快捷键 | 功能 |
 |---|---|
-| Ctrl+T | New tab |
-| Ctrl+Shift+N | New private tab |
-| Ctrl+W | Close tab |
-| Ctrl+L | Focus address bar |
-| Alt+D | Focus address bar |
-| Ctrl+R | Reload |
-| Ctrl+P | Print |
-| Ctrl+F | Find in page |
-| Ctrl+Shift+W | Close split view (when active) |
-| Ctrl+Shift+T | Reopen most recent history entry |
-| Alt+Left / Alt+Right | Back / forward |
-| F12 | Developer tools (when enabled) |
-| F11 | Full screen |
+| `Ctrl+T` | 新建标签页 |
+| `Ctrl+Shift+N` | 新建隐私标签页 |
+| `Ctrl+W` | 关闭当前标签页 |
+| `Ctrl+L` / `Alt+D` | 聚焦地址栏 |
+| `Ctrl+R` | 刷新页面 |
+| `Ctrl+P` | 打印页面 |
+| `Ctrl+F` | 在页面中查找 |
+| `Ctrl+Shift+W` | 退出当前分屏 |
+| `Ctrl+Shift+T` | 打开最近一条历史记录 |
+| `Alt+Left` / `Alt+Right` | 后退 / 前进 |
+| `F11` | 全屏 |
+| `F12` | 开发者工具（需在设置中启用） |
 
-## Build
+## 构建
 
 ```powershell
 dotnet build ZZZ.sln -c Release
 ```
 
-The standalone output is `ZZZ\bin\Release\net48\ZZZ.exe`. Managed dependencies and the x86/x64/ARM64 WebView2 native loaders are embedded into this file. The `Microsoft.NETFramework.ReferenceAssemblies.net48` package is build-only and is not shipped to users.
+普通版本输出位于 `ZZZ\bin\Release\net48\ZZZ.exe`。托管依赖和 x86、x64、ARM64 WebView2 原生加载器会嵌入到单个 EXE 中。
 
-本次 ARM64 构建命令：
+ARM64 构建命令：
 
 ```powershell
 dotnet build ZZZ\ZZZ.csproj -c Release -p:PlatformTarget=ARM64 -p:OutputPath=outputs\win-arm64\
 ```
 
-## License
+## 反馈与许可
 
-[MIT](LICENSE)
+- 问题反馈：[GitHub Issues](https://github.com/zengjiangy/ZZZ/issues)
+- 开源许可：[MIT License](LICENSE)
