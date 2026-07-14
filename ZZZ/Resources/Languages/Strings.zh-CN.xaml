@@ -24,4 +24,5 @@
     <sys:String x:Key="BookmarkGroup">分组</sys:String><sys:String x:Key="AllGroups">全部分组</sys:String><sys:String x:Key="Ungrouped">未分组</sys:String>
     <sys:String x:Key="OpenFile">打开文件</sys:String><sys:String x:Key="FileSize">文件大小</sys:String><sys:String x:Key="DownloadProgress">下载进度</sys:String><sys:String x:Key="DownloadStarted">开始时间</sys:String><sys:String x:Key="DownloadCompletedAt">完成时间</sys:String><sys:String x:Key="DownloadOpenHint">双击已完成的下载即可打开文件。</sys:String><sys:String x:Key="DownloadStarting">正在开始</sys:String><sys:String x:Key="Downloading">正在下载</sys:String><sys:String x:Key="DownloadCompleted">已完成</sys:String><sys:String x:Key="DownloadInterrupted">已中断</sys:String>
     <sys:String x:Key="DevToolsHint">F12 会打开 Microsoft Edge 开发者工具。“设置 &gt; 实验”位于开发者工具窗口内部，不在 ZZZ 设置中；ZZZ 会自动隐藏已经过时的 webhint 关闭提示。</sys:String>
+    <sys:String x:Key="SearchSuggestion">搜索联想</sys:String><sys:String x:Key="ExternalDownloadCookieHint">外部下载器通常无法获得当前页面的 Cookie 和登录会话。下载需要登录或 Cookie 鉴权的资源时，建议优先使用内置下载。</sys:String>
 </ResourceDictionary>

@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<BrowserTabViewModel, BrowserTabView> _tabViews = [];
     private BrowserTabViewModel? _splitTab;
     private BrowserTabViewModel? _findTab;
+    private CancellationTokenSource? _addressSuggestionCancellation;
     private bool _isFullscreen;
     private bool _splitVertical;
     private bool _splitOrientationManuallySet;
@@ -69,10 +70,125 @@ public partial class MainWindow : Window
 
     private void AddressBox_KeyDown(object sender, KeyEventArgs e)
     {
+        if (AddressSuggestionsPopup.IsOpen && e.Key is Key.Down or Key.Up)
+        {
+            var count = AddressSuggestionsList.Items.Count;
+            if (count == 0) return;
+            AddressSuggestionsList.SelectedIndex = e.Key == Key.Down
+                ? Math.Min(count - 1, AddressSuggestionsList.SelectedIndex + 1)
+                : AddressSuggestionsList.SelectedIndex < 0 ? count - 1 : Math.Max(0, AddressSuggestionsList.SelectedIndex - 1);
+            AddressSuggestionsList.ScrollIntoView(AddressSuggestionsList.SelectedItem);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Escape && AddressSuggestionsPopup.IsOpen)
+        {
+            CloseAddressSuggestions();
+            e.Handled = true;
+            return;
+        }
         if (e.Key != Key.Enter) return;
+        if (AddressSuggestionsList.SelectedItem is AddressSuggestion selected)
+        {
+            ExecuteAddressSuggestion(selected);
+            e.Handled = true;
+            return;
+        }
+        CloseAddressSuggestions();
         ViewModel.SelectedTab?.NavigateAddress();
         Keyboard.ClearFocus();
         e.Handled = true;
+    }
+
+    private void AddressBox_TextChanged(object sender, TextChangedEventArgs e) => QueueAddressSuggestions();
+    private void AddressBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => QueueAddressSuggestions();
+
+    private async void QueueAddressSuggestions()
+    {
+        _addressSuggestionCancellation?.Cancel();
+        _addressSuggestionCancellation?.Dispose();
+        var cancellation = new CancellationTokenSource();
+        _addressSuggestionCancellation = cancellation;
+        if (!AddressBox.IsKeyboardFocused || DataContext is not MainViewModel vm || vm.SelectedTab?.IsPrivate == true)
+        {
+            CloseAddressSuggestions(cancelRequest: false);
+            return;
+        }
+
+        var query = AddressBox.Text.Trim();
+        var history = BuildHistorySuggestions(vm, query);
+        ShowAddressSuggestions(history);
+        if (query.Length < 2 || LooksLikeAddress(query)) return;
+
+        try { await Task.Delay(180, cancellation.Token); }
+        catch (OperationCanceledException) { return; }
+        var settings = vm.Services.Settings.Current;
+        var engine = settings.SearchEngines.FirstOrDefault(x => x.Id == settings.ActiveSearchEngineId) ?? settings.SearchEngines.FirstOrDefault();
+        if (engine is null) return;
+        var online = await SearchSuggestionService.GetAsync(engine, query, cancellation.Token);
+        if (cancellation.IsCancellationRequested || !AddressBox.IsKeyboardFocused || !string.Equals(query, AddressBox.Text.Trim(), StringComparison.Ordinal)) return;
+        var combined = history.Concat(online.Select(x => new AddressSuggestion
+        {
+            Value = x,
+            Title = x,
+            Subtitle = engine.Name,
+            Kind = LocalizationService.Text("SearchSuggestion")
+        })).GroupBy(x => x.Value, StringComparer.CurrentCultureIgnoreCase).Select(x => x.First()).Take(8).ToArray();
+        ShowAddressSuggestions(combined);
+    }
+
+    private static IReadOnlyList<AddressSuggestion> BuildHistorySuggestions(MainViewModel vm, string query)
+    {
+        return vm.Services.History.Items
+            .Where(x => query.Length == 0 || x.Title.IndexOf(query, StringComparison.CurrentCultureIgnoreCase) >= 0 || x.Url.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+            .GroupBy(x => x.Url, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .Take(5)
+            .Select(x => new AddressSuggestion
+            {
+                Value = x.Url,
+                Title = string.IsNullOrWhiteSpace(x.Title) ? x.Url : x.Title,
+                Subtitle = x.Url,
+                Kind = LocalizationService.Text("History")
+            }).ToArray();
+    }
+
+    private void ShowAddressSuggestions(IReadOnlyList<AddressSuggestion> suggestions)
+    {
+        var selectedValue = (AddressSuggestionsList.SelectedItem as AddressSuggestion)?.Value;
+        AddressSuggestionsList.ItemsSource = suggestions;
+        AddressSuggestionsList.SelectedItem = selectedValue is null
+            ? null
+            : suggestions.FirstOrDefault(x => string.Equals(x.Value, selectedValue, StringComparison.CurrentCultureIgnoreCase));
+        AddressSuggestionsPopup.IsOpen = suggestions.Count > 0;
+    }
+
+    private void AddressSuggestionsList_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (AddressSuggestionsList.SelectedItem is AddressSuggestion selected) ExecuteAddressSuggestion(selected);
+    }
+
+    private void ExecuteAddressSuggestion(AddressSuggestion suggestion)
+    {
+        CloseAddressSuggestions();
+        ViewModel.SelectedTab?.NavigateText(suggestion.Value);
+        Keyboard.ClearFocus();
+    }
+
+    private void CloseAddressSuggestions(bool cancelRequest = true)
+    {
+        AddressSuggestionsPopup.IsOpen = false;
+        AddressSuggestionsList.ItemsSource = null;
+        if (!cancelRequest) return;
+        _addressSuggestionCancellation?.Cancel();
+        _addressSuggestionCancellation?.Dispose();
+        _addressSuggestionCancellation = null;
+    }
+
+    private static bool LooksLikeAddress(string value)
+    {
+        if (Uri.TryCreate(value, UriKind.Absolute, out _)) return true;
+        return !value.Any(char.IsWhiteSpace) && (value.Contains('.') || value.StartsWith("localhost", StringComparison.OrdinalIgnoreCase));
     }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
@@ -188,7 +304,11 @@ public partial class MainWindow : Window
         menu.IsOpen = true;
     }
 
-    private async void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e) => await ViewModel.Services.Settings.SaveAsync();
+    private async void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        CloseAddressSuggestions();
+        await ViewModel.Services.Settings.SaveAsync();
+    }
 
     private MenuItem BuildSplitMenu()
     {
@@ -338,4 +458,12 @@ public partial class MainWindow : Window
     private void SecondaryZoomOut_Click(object sender, RoutedEventArgs e) => _splitTab?.ZoomBy(-0.1);
     private void SecondaryZoomReset_Click(object sender, RoutedEventArgs e) => _splitTab?.ResetZoom();
     private void SecondaryZoomIn_Click(object sender, RoutedEventArgs e) => _splitTab?.ZoomBy(0.1);
+
+    private sealed class AddressSuggestion
+    {
+        public string Value { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Subtitle { get; set; } = string.Empty;
+        public string Kind { get; set; } = string.Empty;
+    }
 }

@@ -10,4 +10,5 @@
     <sys:String x:Key="BookmarkGroup">グループ</sys:String><sys:String x:Key="AllGroups">すべてのグループ</sys:String><sys:String x:Key="Ungrouped">未分類</sys:String>
     <sys:String x:Key="OpenFile">ファイルを開く</sys:String><sys:String x:Key="FileSize">ファイル サイズ</sys:String><sys:String x:Key="DownloadProgress">進行状況</sys:String><sys:String x:Key="DownloadStarted">開始時刻</sys:String><sys:String x:Key="DownloadCompletedAt">完了時刻</sys:String><sys:String x:Key="DownloadOpenHint">完了したダウンロードをダブルクリックするとファイルを開けます。</sys:String><sys:String x:Key="DownloadStarting">開始しています</sys:String><sys:String x:Key="Downloading">ダウンロード中</sys:String><sys:String x:Key="DownloadCompleted">完了</sys:String><sys:String x:Key="DownloadInterrupted">中断</sys:String>
     <sys:String x:Key="DevToolsHint">F12 で Microsoft Edge DevTools を開きます。「Settings &gt; Experiments」は ZZZ の設定ではなく DevTools ウィンドウ内にあります。古い webhint 無効通知は ZZZ が自動的に非表示にします。</sys:String>
+    <sys:String x:Key="SearchSuggestion">検索候補</sys:String><sys:String x:Key="ExternalDownloadCookieHint">外部ダウンローダーは通常、現在のページの Cookie やサインイン セッションを受け取れません。ログインまたは Cookie 認証が必要なリソースには内蔵ダウンローダーを優先してください。</sys:String>
 </ResourceDictionary>

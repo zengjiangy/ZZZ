@@ -56,6 +56,7 @@
             </StackPanel></ScrollViewer></TabItem>
             <TabItem Header="{DynamicResource Downloads}"><StackPanel Margin="20" MaxWidth="610">
                 <TextBlock Text="{DynamicResource DownloadHandler}" FontWeight="SemiBold"/><ComboBox x:Name="DownloadModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Downloads.Mode}"/>
+                <Border Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,6,0,2"><TextBlock Text="{DynamicResource ExternalDownloadCookieHint}" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}"/></Border>
                 <TextBlock Text="{DynamicResource DownloadFolder}" Margin="0,12,0,2"/><TextBox Text="{Binding Downloads.Folder}"/>
                 <TextBlock Text="{DynamicResource ExternalDownloader}" Margin="0,12,0,2"/><TextBox Text="{Binding Downloads.ExternalCommand}"/>
                 <TextBlock Text="{DynamicResource ExternalArguments}" Margin="0,12,0,2"/><TextBox Text="{Binding Downloads.ExternalArguments}"/>

@@ -2,7 +2,7 @@
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF、MVVM 和 Microsoft WebView2。它使用系统安装的 WebView2 Runtime，不额外捆绑 Chromium，并支持将全部浏览数据放在 EXE 同目录以便 U 盘携带。
 
-当前版本：**1.5.2**。
+当前版本：**1.5.3**。
 
 ## Download
 
@@ -15,7 +15,7 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 - 多标签页、复制标签、关闭其他/右侧标签及后台标签休眠
 - 支持自适应左右/上下双页面分屏、各窗格独立缩放、快捷关闭、F11 沉浸式全屏，以及 `Ctrl+F` 页内查找
 - 可打印当前网页，并将完整页面保存为 PDF 或 MHT 网页归档
-- 地址/搜索合一，内置 Bing、Google、百度、DuckDuckGo 并支持自定义模板
+- 地址/搜索合一，输入时即时匹配本地历史，并为 Bing、Google、百度、DuckDuckGo 提供防抖在线搜索联想；支持自定义搜索模板
 - Typed settings for appearance, interface visibility, privacy, user-agent, downloads, and advanced features
 - Request/response media sniffing by URL, MIME type, HLS/DASH manifest, and content metadata
 - Tampermonkey-style userscripts with metadata import, run timing, match/exclude rules, `@require`, resources, persistent values, and common `GM_*` APIs
@@ -28,7 +28,7 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 - 历史记录支持双击直接打开、删除单条记录或清空全部记录
 - Reactive bookmark indicator with click-to-add/remove behavior
 - Strict private tabs backed by unique InPrivate profiles in a separate per-session temporary WebView2 environment
-- 内置下载管理器显示文件大小、传输进度、MIME、开始/完成时间、状态及保存位置，支持双击打开；也可配置外部下载器和媒体播放器
+- 内置下载管理器显示文件大小、传输进度、MIME、开始/完成时间、状态及保存位置，支持双击打开；也可配置外部下载器和媒体播放器，并提示 Cookie 鉴权资源优先使用内置下载
 - 本机 AppData、EXE 同目录便携模式或自定义数据/Cookie 路径，并支持重启迁移
 - SVG 多分辨率图标与上次会话恢复
 - A single shared browser instance accepts URLs from later launches; inactive tabs request WebView2's low-memory mode
