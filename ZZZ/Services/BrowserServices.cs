@@ -8,6 +8,7 @@ using ZZZ.ViewModels;
 using ZZZ.Views;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Input;
 
 namespace ZZZ.Services;
 
@@ -74,11 +75,21 @@ public sealed class DownloadService(ISettingsService settings) : IDownloadServic
 public interface IBrowserLifecycleService : IDisposable
 {
     event Action<string, bool>? NewTabRequested;
+    event EventHandler<BrowserShortcutEventArgs>? ShortcutRequested;
     Task InitializeAsync(WebView2 view, BrowserTabViewModel tab);
     Task ApplyCurrentSettingsAsync(bool reloadPages);
     void SetActive(BrowserTabViewModel? activeTab);
     void Sleep(BrowserTabViewModel tab);
     void Close(BrowserTabViewModel tab);
+}
+
+public enum BrowserShortcut { Find, CloseSplit }
+
+public sealed class BrowserShortcutEventArgs(BrowserTabViewModel tab, BrowserShortcut shortcut) : EventArgs
+{
+    public BrowserTabViewModel Tab { get; } = tab;
+    public BrowserShortcut Shortcut { get; } = shortcut;
+    public bool Handled { get; set; }
 }
 
 public sealed class BrowserLifecycleService : IBrowserLifecycleService
@@ -101,6 +112,8 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private Task<CoreWebView2Environment>? _environmentTask;
     private Task<CoreWebView2Environment>? _privateEnvironmentTask;
     public event Action<string, bool>? NewTabRequested;
+    public event EventHandler<BrowserShortcutEventArgs>? ShortcutRequested;
+
 
     public BrowserLifecycleService(ISettingsService settings, IAdBlockService adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy, ITranslationService translation)
     {
@@ -127,8 +140,22 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         _views[tab] = new WeakReference<WebView2>(view);
         _tabEnvironments[tab] = environment;
         tab.Attach(view);
+        view.PreviewKeyDown += (_, e) => OnWebViewPreviewKeyDown(tab, e);
         await ConfigureAsync(core, tab);
         if (!string.IsNullOrWhiteSpace(tab.Url)) view.Source = new Uri(tab.Url);
+    }
+
+    private void OnWebViewPreviewKeyDown(BrowserTabViewModel tab, KeyEventArgs e)
+    {
+        var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+        BrowserShortcut? shortcut = ctrl && e.Key == Key.F ? BrowserShortcut.Find
+            : ctrl && shift && e.Key == Key.W ? BrowserShortcut.CloseSplit
+            : null;
+        if (shortcut is null) return;
+        var request = new BrowserShortcutEventArgs(tab, shortcut.Value);
+        ShortcutRequested?.Invoke(this, request);
+        if (request.Handled) e.Handled = true;
     }
 
     private async Task ConfigureAsync(CoreWebView2 core, BrowserTabViewModel tab)

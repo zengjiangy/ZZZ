@@ -148,17 +148,22 @@ public partial class StartPageView : UserControl
     {
         var settings = App.Services.Settings.Current.StartPage;
         var width = Math.Max(100, Math.Min(260, settings.BookmarkTileWidth));
-        BookmarksList.ItemsSource = App.Services.Bookmarks.Items.Where(x => x.ShowOnStartPage).Take(24).Select(x => new StartBookmark
-        {
-            Title = x.Title,
-            Url = x.Url,
-            DisplayUrl = Uri.TryCreate(x.Url, UriKind.Absolute, out var uri) ? uri.Host : x.Url,
-            TileWidth = width,
-            TileHeight = settings.BookmarkStyle == BookmarkTileStyle.Card ? 72 : settings.BookmarkStyle == BookmarkTileStyle.Compact ? 38 : 48,
-            TilePadding = settings.BookmarkStyle == BookmarkTileStyle.Compact ? new Thickness(9, 4, 9, 4) : new Thickness(14, 8, 14, 8),
-            TitleSize = settings.BookmarkStyle == BookmarkTileStyle.Card ? 14 : 12,
-            ShowUrl = settings.BookmarkStyle == BookmarkTileStyle.Card
-        }).ToArray();
+        BookmarksList.ItemsSource = App.Services.Bookmarks.Items.Where(x => x.ShowOnStartPage).Take(24)
+            .Select(x => new StartBookmark
+            {
+                Group = string.IsNullOrWhiteSpace(x.Group) ? LocalizationService.Text("Ungrouped") : x.Group.Trim(),
+                Title = x.Title,
+                Url = x.Url,
+                DisplayUrl = Uri.TryCreate(x.Url, UriKind.Absolute, out var uri) ? uri.Host : x.Url,
+                TileWidth = width,
+                TileHeight = settings.BookmarkStyle == BookmarkTileStyle.Card ? 72 : settings.BookmarkStyle == BookmarkTileStyle.Compact ? 38 : 48,
+                TilePadding = settings.BookmarkStyle == BookmarkTileStyle.Compact ? new Thickness(9, 4, 9, 4) : new Thickness(14, 8, 14, 8),
+                TitleSize = settings.BookmarkStyle == BookmarkTileStyle.Card ? 14 : 12,
+                ShowUrl = settings.BookmarkStyle == BookmarkTileStyle.Card
+            })
+            .GroupBy(x => x.Group, StringComparer.CurrentCultureIgnoreCase)
+            .Select(x => new StartBookmarkGroup { Name = x.Key, Items = x.ToArray() })
+            .ToArray();
     }
 
     private void SearchBox_KeyDown(object sender, KeyEventArgs e)
@@ -175,6 +180,7 @@ public partial class StartPageView : UserControl
 
     private sealed class StartBookmark
     {
+        public string Group { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public string Url { get; set; } = string.Empty;
         public string DisplayUrl { get; set; } = string.Empty;
@@ -183,5 +189,11 @@ public partial class StartPageView : UserControl
         public Thickness TilePadding { get; set; }
         public double TitleSize { get; set; }
         public bool ShowUrl { get; set; }
+    }
+
+    private sealed class StartBookmarkGroup
+    {
+        public string Name { get; set; } = string.Empty;
+        public IReadOnlyList<StartBookmark> Items { get; set; } = [];
     }
 }

@@ -18,16 +18,16 @@ public partial class LibraryWindow : Window
         InitializeComponent();
         _main = main;
         Owner = Application.Current.MainWindow;
-        BookmarksGrid.ItemsSource = main.Services.Bookmarks.Items;
+        RefreshBookmarkGroups();
         HistoryGrid.ItemsSource = main.Services.History.Items;
         _scripts = new ObservableCollection<UserScript>(main.Services.UserScripts.Items.Select(Clone));
         ScriptsGrid.ItemsSource = _scripts;
         if (_scripts.Count > 0) ScriptsGrid.SelectedIndex = 0;
     }
     private void OpenBookmark_Click(object sender, RoutedEventArgs e) { if (BookmarksGrid.SelectedItem is Bookmark b) { _main.CreateTab(b.Url); Close(); } }
-    private async void RemoveBookmark_Click(object sender, RoutedEventArgs e) { if (BookmarksGrid.SelectedItem is Bookmark b) { await _main.Services.Bookmarks.RemoveAsync(b); BookmarksGrid.Items.Refresh(); } }
-    private async void SaveBookmarks_Click(object sender, RoutedEventArgs e) { BookmarksGrid.CommitEdit(); await _main.Services.Bookmarks.SaveAsync(); }
-    private async void ImportBookmarks_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "Bookmarks HTML|*.html;*.htm" }; if (d.ShowDialog() == true) { await _main.Services.Bookmarks.ImportHtmlAsync(d.FileName); BookmarksGrid.Items.Refresh(); } }
+    private async void RemoveBookmark_Click(object sender, RoutedEventArgs e) { if (BookmarksGrid.SelectedItem is Bookmark b) { await _main.Services.Bookmarks.RemoveAsync(b); RefreshBookmarkGroups(); } }
+    private async void SaveBookmarks_Click(object sender, RoutedEventArgs e) { BookmarksGrid.CommitEdit(DataGridEditingUnit.Cell, true); BookmarksGrid.CommitEdit(DataGridEditingUnit.Row, true); await _main.Services.Bookmarks.SaveAsync(); RefreshBookmarkGroups(); }
+    private async void ImportBookmarks_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "Bookmarks HTML|*.html;*.htm" }; if (d.ShowDialog() == true) { await _main.Services.Bookmarks.ImportHtmlAsync(d.FileName); RefreshBookmarkGroups(); } }
     private async void ExportBookmarks_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "HTML|*.html", FileName = "zzz-bookmarks.html" }; if (d.ShowDialog() == true) await _main.Services.Bookmarks.ExportHtmlAsync(d.FileName); }
     private void OpenHistory_Click(object sender, RoutedEventArgs e) { if (HistoryGrid.SelectedItem is HistoryEntry h) { _main.CreateTab(h.Url); Close(); } }
     private void HistoryGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => OpenHistory_Click(sender, e);
@@ -57,6 +57,28 @@ public partial class LibraryWindow : Window
     private void RemoveScript_Click(object sender, RoutedEventArgs e) { if (ScriptsGrid.SelectedItem is UserScript s && ConfirmSensitive("RemoveScript")) _scripts.Remove(s); }
     private async void SaveScripts_Click(object sender, RoutedEventArgs e) { ScriptsGrid.CommitEdit(); await _main.Services.UserScripts.SaveAsync(_scripts); await _main.ReapplySettingsAsync(); }
     private void ScriptsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
+    private void BookmarkGroupFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshBookmarkView();
+    private void RefreshBookmarkGroups()
+    {
+        var selected = BookmarkGroupFilterBox.SelectedItem as string ?? LocalizationService.Text("AllGroups");
+        var groups = new[] { LocalizationService.Text("AllGroups"), LocalizationService.Text("Ungrouped") }
+            .Concat(_main.Services.Bookmarks.Items.Select(x => x.Group?.Trim() ?? string.Empty).Where(x => x.Length > 0).Distinct(StringComparer.CurrentCultureIgnoreCase).OrderBy(x => x))
+            .ToArray();
+        BookmarkGroupFilterBox.ItemsSource = groups;
+        BookmarkGroupFilterBox.SelectedItem = groups.FirstOrDefault(x => string.Equals(x, selected, StringComparison.CurrentCultureIgnoreCase)) ?? groups[0];
+        RefreshBookmarkView();
+    }
+    private void RefreshBookmarkView()
+    {
+        if (BookmarkGroupFilterBox.SelectedItem is not string selected) return;
+        var all = LocalizationService.Text("AllGroups");
+        var ungrouped = LocalizationService.Text("Ungrouped");
+        BookmarksGrid.ItemsSource = selected == all
+            ? _main.Services.Bookmarks.Items
+            : selected == ungrouped
+                ? _main.Services.Bookmarks.Items.Where(x => string.IsNullOrWhiteSpace(x.Group)).ToArray()
+                : _main.Services.Bookmarks.Items.Where(x => string.Equals(x.Group?.Trim(), selected, StringComparison.CurrentCultureIgnoreCase)).ToArray();
+    }
     private bool ConfirmSensitive(string operationKey)
     {
         var operation = LocalizationService.Text(operationKey);

@@ -12,12 +12,19 @@
                          CaretBrush="White" KeyDown="SearchBox_KeyDown" ToolTip="{DynamicResource AddressPlaceholder}"/>
             </Border>
             <ItemsControl x:Name="BookmarksList" Grid.Row="1" Margin="0,18,0,0" HorizontalAlignment="Center">
-                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate><DataTemplate>
-                    <Button Tag="{Binding Url}" Click="Bookmark_Click" ToolTip="{Binding Url}" Margin="5" Padding="{Binding TilePadding}" Width="{Binding TileWidth}" Height="{Binding TileHeight}"
-                            Background="#C9202733" Foreground="White" BorderBrush="#44FFFFFF" BorderThickness="1">
-                        <StackPanel><TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" FontSize="{Binding TitleSize}" HorizontalAlignment="Center"/><TextBlock Text="{Binding DisplayUrl}" Visibility="{Binding ShowUrl, Converter={StaticResource BoolVisibility}}" Opacity="0.65" FontSize="10" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" Margin="0,4,0,0"/></StackPanel>
-                    </Button>
+                    <StackPanel Margin="0,0,0,9">
+                        <TextBlock Text="{Binding Name}" Foreground="White" Opacity="0.72" FontWeight="SemiBold" Margin="5,0,5,3"/>
+                        <ItemsControl ItemsSource="{Binding Items}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate><DataTemplate>
+                                <Button Tag="{Binding Url}" Click="Bookmark_Click" ToolTip="{Binding Url}" Margin="5" Padding="{Binding TilePadding}" Width="{Binding TileWidth}" Height="{Binding TileHeight}"
+                                        Background="#C9202733" Foreground="White" BorderBrush="#44FFFFFF" BorderThickness="1">
+                                    <StackPanel><TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" FontSize="{Binding TitleSize}" HorizontalAlignment="Center"/><TextBlock Text="{Binding DisplayUrl}" Visibility="{Binding ShowUrl, Converter={StaticResource BoolVisibility}}" Opacity="0.65" FontSize="10" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" Margin="0,4,0,0"/></StackPanel>
+                                </Button>
+                            </DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </DataTemplate></ItemsControl.ItemTemplate>
             </ItemsControl>
         </Grid>

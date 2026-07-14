@@ -29,6 +29,7 @@ public partial class BrowserTabViewModel : ObservableObject
     [ObservableProperty] private DateTime lastActiveUtc = DateTime.UtcNow;
     [ObservableProperty] private int startPageRevision;
     public ObservableCollection<MediaResource> MediaResources { get; } = [];
+    public double ZoomFactor { get; private set; } = 1;
     public bool HasMedia => MediaResources.Count > 0;
     public bool IsStartPage => BrowserHome.IsStartPage(Url);
     public bool IsPrivate { get; }
@@ -46,6 +47,7 @@ public partial class BrowserTabViewModel : ObservableObject
     public void Attach(WebView2 view)
     {
         _view = view;
+        _view.ZoomFactor = ZoomFactor;
         IsSleeping = false;
     }
 
@@ -71,11 +73,21 @@ public partial class BrowserTabViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(input)) return;
         var target = ToUrl(input);
         Url = target;
+        // The built-in start page is rendered by WPF rather than WebView2.  Setting
+        // Url swaps the view immediately, so never navigate the WebView that the
+        // swap just disposed.
+        if (BrowserHome.IsStartPage(target))
+        {
+            IsLoading = false;
+            Status = string.Empty;
+            return;
+        }
         if (_view?.CoreWebView2 is not null) _view.CoreWebView2.Navigate(target);
     }
 
     private string ToUrl(string input)
     {
+        if (BrowserHome.IsStartPage(input)) return BrowserHome.StartPageUrl;
         if (Uri.TryCreate(input, UriKind.Absolute, out var uri) && (uri.Scheme == "http" || uri.Scheme == "https" || uri.Scheme == "file")) return uri.AbsoluteUri;
         if (!input.Contains(' ') && input.Contains('.') && Uri.TryCreate("https://" + input, UriKind.Absolute, out uri)) return uri.AbsoluteUri;
         var engine = _services.Settings.Current.SearchEngines.FirstOrDefault(x => x.Id == _services.Settings.Current.ActiveSearchEngineId) ?? _services.Settings.Current.SearchEngines.First();
@@ -219,6 +231,18 @@ public partial class BrowserTabViewModel : ObservableObject
         if (_view?.CoreWebView2 is not { } core || string.IsNullOrWhiteSpace(query)) return;
         var encoded = JsonSerializer.Serialize(query);
         await core.ExecuteScriptAsync($"window.find({encoded}, false, {(backwards ? "true" : "false")}, true, false, true, false)");
+    }
+
+    public void ZoomBy(double delta)
+    {
+        ZoomFactor = Math.Max(0.5, Math.Min(2, Math.Round((ZoomFactor + delta) * 10) / 10));
+        if (_view is not null) _view.ZoomFactor = ZoomFactor;
+    }
+
+    public void ResetZoom()
+    {
+        ZoomFactor = 1;
+        if (_view is not null) _view.ZoomFactor = 1;
     }
 
     private static string SafeFileName(string value)

@@ -2,7 +2,7 @@
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF、MVVM 和 Microsoft WebView2。它使用系统安装的 WebView2 Runtime，不额外捆绑 Chromium，并支持将全部浏览数据放在 EXE 同目录以便 U 盘携带。
 
-当前版本：**1.5.0**。
+当前版本：**1.5.1**。
 
 ## Download
 
@@ -13,7 +13,7 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 - 原生低开销启动页，仅包含搜索/地址输入框和可选书签，不启动 WebView2；支持纯色、图片与动态 GIF 背景
 - 可选择以内置启动页或当前搜索引擎网站作为主页
 - 多标签页、复制标签、关闭其他/右侧标签及后台标签休眠
-- 支持双页面分屏浏览、F11 沉浸式全屏，以及 `Ctrl+F` 页内查找
+- 支持自适应左右/上下双页面分屏、各窗格独立缩放、快捷关闭、F11 沉浸式全屏，以及 `Ctrl+F` 页内查找
 - 可打印当前网页，并将完整页面保存为 PDF 或 MHT 网页归档
 - 地址/搜索合一，内置 Bing、Google、百度、DuckDuckGo 并支持自定义模板
 - Typed settings for appearance, interface visibility, privacy, user-agent, downloads, and advanced features
@@ -23,8 +23,8 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 - Unified application and website light/dark themes, with Smart and Force web rendering strengths
 - Runtime-switchable English, Simplified Chinese, Traditional Chinese, and Japanese interface resources
 - DNT、GPC、平衡式第三方跟踪 Cookie 限制、WebRTC 限制及可配置站点权限；位置请求可逐次或始终返回自定义坐标
-- Bookmark HTML import/export, history, settings backup/restore, rule import/export, and modern in-app browsing-data cleanup
-- 每条书签可单独选择是否出现在主页，并可统一调整主页书签的样式和宽度
+- Bookmark HTML import/export (including folder groups), history, settings backup/restore, rule import/export, and modern in-app browsing-data cleanup
+- 书签支持分组编辑和筛选，主页按组展示；每条书签可单独选择是否出现在主页，并可统一调整主页书签的样式和宽度
 - 历史记录支持双击直接打开、删除单条记录或清空全部记录
 - Reactive bookmark indicator with click-to-add/remove behavior
 - Strict private tabs backed by unique InPrivate profiles in a separate per-session temporary WebView2 environment
@@ -63,6 +63,7 @@ Open **Library → Userscripts** to create a script or import a `.user.js` file.
 | Ctrl+R | Reload |
 | Ctrl+P | Print |
 | Ctrl+F | Find in page |
+| Ctrl+Shift+W | Close split view (when active) |
 | Ctrl+Shift+T | Reopen most recent history entry |
 | Alt+Left / Alt+Right | Back / forward |
 | F12 | Developer tools (when enabled) |

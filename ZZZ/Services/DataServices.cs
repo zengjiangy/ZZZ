@@ -248,8 +248,13 @@ public sealed class BookmarkService : IBookmarkService
     public async Task ExportHtmlAsync(string path)
     {
         var html = new StringBuilder("<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>ZZZ Bookmarks</TITLE>\n<H1>ZZZ Bookmarks</H1>\n<DL><p>\n");
-        foreach (var item in _items)
-            html.Append("<DT><A HREF=\"").Append(WebUtility.HtmlEncode(item.Url)).Append("\">").Append(WebUtility.HtmlEncode(item.Title)).Append("</A>\n");
+        foreach (var item in _items.Where(x => string.IsNullOrWhiteSpace(x.Group))) AppendBookmarkHtml(html, item, "    ");
+        foreach (var group in _items.Where(x => !string.IsNullOrWhiteSpace(x.Group)).GroupBy(x => x.Group.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            html.Append("    <DT><H3>").Append(WebUtility.HtmlEncode(group.Key)).Append("</H3>\n    <DL><p>\n");
+            foreach (var item in group) AppendBookmarkHtml(html, item, "        ");
+            html.Append("    </DL><p>\n");
+        }
         html.Append("</DL><p>\n");
         File.WriteAllText(path, html.ToString(), Encoding.UTF8);
         await Task.CompletedTask;
@@ -258,15 +263,43 @@ public sealed class BookmarkService : IBookmarkService
     {
         var html = File.ReadAllText(path);
         var changed = false;
-        foreach (Match match in Regex.Matches(html, "<A\\s+[^>]*HREF=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*>(?<title>.*?)</A>", RegexOptions.IgnoreCase | RegexOptions.Singleline))
+        var folders = new List<string>();
+        string? pendingFolder = null;
+        const string tokenPattern = "<H3\\b[^>]*>(?<folder>.*?)</H3>|<A\\s+[^>]*HREF=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*>(?<title>.*?)</A>|(?<open><DL\\b[^>]*>)|(?<close></DL\\s*>)";
+        foreach (Match match in Regex.Matches(html, tokenPattern, RegexOptions.IgnoreCase | RegexOptions.Singleline))
         {
+            if (match.Groups["folder"].Success)
+            {
+                pendingFolder = CleanHtmlText(match.Groups["folder"].Value);
+                continue;
+            }
+            if (match.Groups["open"].Success)
+            {
+                folders.Add(pendingFolder ?? string.Empty);
+                pendingFolder = null;
+                continue;
+            }
+            if (match.Groups["close"].Success)
+            {
+                if (folders.Count > 0) folders.RemoveAt(folders.Count - 1);
+                continue;
+            }
+            if (!match.Groups["url"].Success) continue;
             var url = WebUtility.HtmlDecode(match.Groups["url"].Value);
-            var title = WebUtility.HtmlDecode(Regex.Replace(match.Groups["title"].Value, "<.*?>", string.Empty));
-            if (!Contains(url)) { _items.Add(new Bookmark { Title = title, Url = url }); changed = true; }
+            var title = CleanHtmlText(match.Groups["title"].Value);
+            var group = string.Join(" / ", folders.Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (!Contains(url)) { _items.Add(new Bookmark { Title = title, Url = url, Group = group }); changed = true; }
         }
         await JsonFiles.SaveAsync(AppPaths.Bookmarks, _items);
         if (changed) Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    private static void AppendBookmarkHtml(StringBuilder html, Bookmark item, string indent) =>
+        html.Append(indent).Append("<DT><A HREF=\"").Append(WebUtility.HtmlEncode(item.Url)).Append("\">")
+            .Append(WebUtility.HtmlEncode(item.Title)).Append("</A>\n");
+
+    private static string CleanHtmlText(string value) =>
+        WebUtility.HtmlDecode(Regex.Replace(value, "<.*?>", string.Empty)).Trim();
 
     private static bool SameUrl(string left, string right)
     {

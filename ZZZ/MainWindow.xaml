@@ -85,15 +85,29 @@
 
         <ProgressBar Grid.Row="2" Height="2" IsIndeterminate="True" Foreground="{DynamicResource AccentBrush}" Background="Transparent" Visibility="{Binding SelectedTab.IsLoading, Converter={StaticResource BoolVisibility}}"/>
         <Border Grid.Row="3" Background="{DynamicResource WebBackdropBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
-            <Grid>
-                <Grid x:Name="BrowserArea"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="SplitterColumn" Width="0"/><ColumnDefinition x:Name="SecondaryColumn" Width="0"/></Grid.ColumnDefinitions>
-                    <ContentControl x:Name="TabContentHost"/>
+            <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <!-- WebView2 is an HWND surface, so tool strips live in their own layout row instead of overlaying the page. -->
+                <WrapPanel x:Name="PageTools" Background="{DynamicResource ChromeBrush}" HorizontalAlignment="Right">
+                    <Border x:Name="SplitBar" Margin="8,5" Padding="7,3" CornerRadius="9" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{DynamicResource SplitScreen}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="5,0,9,0"/>
+                            <Button x:Name="SplitOrientationButton" Content="↕" Click="ToggleSplitOrientation_Click" ToolTip="{DynamicResource ToggleSplitOrientation}"/>
+                            <Border Width="1" Height="22" Background="{DynamicResource LineBrush}" Margin="5,0"/>
+                            <TextBlock Text="{DynamicResource PrimaryPane}" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}"/><Button Content="−" Click="PrimaryZoomOut_Click"/><Button Content="100%" Click="PrimaryZoomReset_Click"/><Button Content="+" Click="PrimaryZoomIn_Click"/>
+                            <TextBlock Text="{DynamicResource SecondaryPane}" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" Margin="8,0,0,0"/><Button Content="−" Click="SecondaryZoomOut_Click"/><Button Content="100%" Click="SecondaryZoomReset_Click"/><Button Content="+" Click="SecondaryZoomIn_Click"/>
+                            <Button Content="×" Click="CloseSplit_Click" ToolTip="{DynamicResource CloseSplit}" Margin="8,0,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="FindBar" Margin="8,5" Padding="7,3" CornerRadius="9" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal"><TextBox x:Name="FindBox" Width="230" Padding="10,6" KeyDown="FindBox_KeyDown"/><Button Content="↑" Click="FindPrevious_Click" ToolTip="{DynamicResource FindPrevious}"/><Button Content="↓" Click="FindNext_Click" ToolTip="{DynamicResource FindNext}"/><Button Content="×" Click="CloseFind_Click" ToolTip="{DynamicResource Close}"/></StackPanel>
+                    </Border>
+                </WrapPanel>
+                <Grid x:Name="BrowserArea" Grid.Row="1" ClipToBounds="True"><Grid.ColumnDefinitions><ColumnDefinition x:Name="PrimaryColumn" Width="*"/><ColumnDefinition x:Name="SplitterColumn" Width="0"/><ColumnDefinition x:Name="SecondaryColumn" Width="0"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition x:Name="PrimaryRow" Height="*"/><RowDefinition x:Name="HorizontalSplitterRow" Height="0"/><RowDefinition x:Name="SecondaryRow" Height="0"/></Grid.RowDefinitions>
+                    <ContentControl x:Name="TabContentHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
                     <GridSplitter x:Name="SplitDivider" Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource LineBrush}" Visibility="Collapsed"/>
-                    <ContentControl x:Name="SecondaryTabContentHost" Grid.Column="2"/>
+                    <GridSplitter x:Name="HorizontalSplitDivider" Grid.Row="1" Height="5" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Background="{DynamicResource LineBrush}" Visibility="Collapsed"/>
+                    <ContentControl x:Name="SecondaryTabContentHost" Grid.Column="2" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
                 </Grid>
-                <Border x:Name="FindBar" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Padding="7" CornerRadius="11" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Visibility="Collapsed">
-                    <StackPanel Orientation="Horizontal"><TextBox x:Name="FindBox" Width="230" Padding="10,6" KeyDown="FindBox_KeyDown"/><Button Content="↑" Click="FindPrevious_Click" ToolTip="{DynamicResource FindPrevious}"/><Button Content="↓" Click="FindNext_Click" ToolTip="{DynamicResource FindNext}"/><Button Content="×" Click="CloseFind_Click" ToolTip="{DynamicResource Close}"/></StackPanel>
-                </Border>
             </Grid>
         </Border>
         <Border x:Name="StatusBar" Grid.Row="4" Background="{DynamicResource ChromeBrush}"><TextBlock Text="{Binding SelectedTab.Status}" Foreground="{DynamicResource MutedBrush}" Margin="12,4" FontSize="11" TextTrimming="CharacterEllipsis"/></Border>

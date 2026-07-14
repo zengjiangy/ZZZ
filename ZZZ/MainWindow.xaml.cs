@@ -15,7 +15,10 @@ public partial class MainWindow : Window
 {
     private readonly Dictionary<BrowserTabViewModel, BrowserTabView> _tabViews = [];
     private BrowserTabViewModel? _splitTab;
+    private BrowserTabViewModel? _findTab;
     private bool _isFullscreen;
+    private bool _splitVertical;
+    private bool _splitOrientationManuallySet;
     private WindowState _stateBeforeFullscreen;
     private WindowStyle _styleBeforeFullscreen;
     private ResizeMode _resizeBeforeFullscreen;
@@ -26,9 +29,10 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContextChanged += (_, e) =>
         {
-            if (e.OldValue is MainViewModel oldVm) { oldVm.PropertyChanged -= ViewModel_PropertyChanged; oldVm.Tabs.CollectionChanged -= Tabs_CollectionChanged; }
-            if (e.NewValue is MainViewModel newVm) { newVm.PropertyChanged += ViewModel_PropertyChanged; newVm.Tabs.CollectionChanged += Tabs_CollectionChanged; ShowSelectedTab(newVm.SelectedTab); }
+            if (e.OldValue is MainViewModel oldVm) { oldVm.PropertyChanged -= ViewModel_PropertyChanged; oldVm.Tabs.CollectionChanged -= Tabs_CollectionChanged; oldVm.Services.Browser.ShortcutRequested -= Browser_ShortcutRequested; }
+            if (e.NewValue is MainViewModel newVm) { newVm.PropertyChanged += ViewModel_PropertyChanged; newVm.Tabs.CollectionChanged += Tabs_CollectionChanged; newVm.Services.Browser.ShortcutRequested += Browser_ShortcutRequested; ShowSelectedTab(newVm.SelectedTab); }
         };
+        SizeChanged += Window_SizeChanged;
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -42,6 +46,7 @@ public partial class MainWindow : Window
         foreach (BrowserTabViewModel tab in e.OldItems)
         {
             _tabViews.Remove(tab);
+            if (ReferenceEquals(_findTab, tab)) CloseFind();
             if (ReferenceEquals(_splitTab, tab)) CloseSplit();
         }
     }
@@ -79,6 +84,7 @@ public partial class MainWindow : Window
         if (ctrl && shift && e.Key == Key.N) { ViewModel.CreateTab(home, true); e.Handled = true; }
         else if (ctrl && shift && e.Key == Key.T) { ViewModel.CreateTab(ViewModel.Services.History.Items.FirstOrDefault()?.Url ?? home); e.Handled = true; }
         else if (ctrl && e.Key == Key.T) { ViewModel.CreateTab(home); e.Handled = true; }
+        else if (ctrl && shift && e.Key == Key.W && _splitTab is not null) { CloseSplit(); e.Handled = true; }
         else if (ctrl && e.Key == Key.W && ViewModel.SelectedTab is not null) { ViewModel.CloseTabCommand.Execute(ViewModel.SelectedTab); e.Handled = true; }
         else if ((ctrl && e.Key == Key.L) || (alt && e.Key == Key.D)) { AddressBox.Focus(); AddressBox.SelectAll(); e.Handled = true; }
         else if (ctrl && e.Key == Key.R) { ViewModel.SelectedTab?.ReloadCommand.Execute(null); e.Handled = true; }
@@ -186,7 +192,7 @@ public partial class MainWindow : Window
         if (_splitTab is not null)
         {
             split.Items.Add(new Separator());
-            split.Items.Add(Item(LocalizationService.Text("CloseSplit"), (_, _) => CloseSplit()));
+            split.Items.Add(Item(LocalizationService.Text("CloseSplit"), (_, _) => CloseSplit(), "Ctrl+Shift+W"));
         }
         if (split.Items.Count == 0)
         {
@@ -205,20 +211,23 @@ public partial class MainWindow : Window
     private void OpenSplit(BrowserTabViewModel tab)
     {
         _splitTab = tab;
+        ViewModel.SelectedTab?.ResetZoom();
+        tab.ResetZoom();
         if (!_tabViews.TryGetValue(tab, out var view)) { view = new BrowserTabView { DataContext = tab }; _tabViews[tab] = view; }
         SecondaryTabContentHost.Content = view;
-        SplitterColumn.Width = new GridLength(5);
-        SecondaryColumn.Width = new GridLength(1, GridUnitType.Star);
-        SplitDivider.Visibility = Visibility.Visible;
+        SplitBar.Visibility = Visibility.Visible;
+        _splitOrientationManuallySet = false;
+        _splitVertical = BrowserArea.ActualWidth < 1400;
+        UpdateSplitLayout();
     }
 
     private void CloseSplit()
     {
+        if (ReferenceEquals(_findTab, _splitTab)) CloseFind();
         _splitTab = null;
         SecondaryTabContentHost.Content = null;
-        SplitterColumn.Width = new GridLength(0);
-        SecondaryColumn.Width = new GridLength(0);
-        SplitDivider.Visibility = Visibility.Collapsed;
+        SplitBar.Visibility = Visibility.Collapsed;
+        ResetSplitLayout();
     }
 
     private void ToggleFullscreen()
@@ -241,13 +250,82 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ShowFind() { FindBar.Visibility = Visibility.Visible; FindBox.Focus(); FindBox.SelectAll(); }
-    private void CloseFind_Click(object sender, RoutedEventArgs e) => FindBar.Visibility = Visibility.Collapsed;
-    private async void FindNext_Click(object sender, RoutedEventArgs e) => await (ViewModel.SelectedTab?.FindAsync(FindBox.Text, false) ?? Task.CompletedTask);
-    private async void FindPrevious_Click(object sender, RoutedEventArgs e) => await (ViewModel.SelectedTab?.FindAsync(FindBox.Text, true) ?? Task.CompletedTask);
+    private void ShowFind(BrowserTabViewModel? target = null) { _findTab = target ?? ViewModel.SelectedTab; FindBar.Visibility = Visibility.Visible; FindBox.Focus(); FindBox.SelectAll(); }
+    private void CloseFind() { FindBar.Visibility = Visibility.Collapsed; _findTab = null; }
+    private void CloseFind_Click(object sender, RoutedEventArgs e) => CloseFind();
+    private async void FindNext_Click(object sender, RoutedEventArgs e) => await ((_findTab ?? ViewModel.SelectedTab)?.FindAsync(FindBox.Text, false) ?? Task.CompletedTask);
+    private async void FindPrevious_Click(object sender, RoutedEventArgs e) => await ((_findTab ?? ViewModel.SelectedTab)?.FindAsync(FindBox.Text, true) ?? Task.CompletedTask);
     private async void FindBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape) { FindBar.Visibility = Visibility.Collapsed; e.Handled = true; return; }
-        if (e.Key == Key.Enter) { await (ViewModel.SelectedTab?.FindAsync(FindBox.Text, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) ?? Task.CompletedTask); e.Handled = true; }
+        if (e.Key == Key.Escape) { CloseFind(); e.Handled = true; return; }
+        if (e.Key == Key.Enter) { await ((_findTab ?? ViewModel.SelectedTab)?.FindAsync(FindBox.Text, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) ?? Task.CompletedTask); e.Handled = true; }
     }
+
+    private void Browser_ShortcutRequested(object? sender, BrowserShortcutEventArgs e)
+    {
+        if (e.Shortcut == BrowserShortcut.Find)
+        {
+            e.Handled = true;
+            Dispatcher.BeginInvoke(new Action(() => ShowFind(e.Tab)));
+        }
+        else if (e.Shortcut == BrowserShortcut.CloseSplit && _splitTab is not null)
+        {
+            e.Handled = true;
+            Dispatcher.BeginInvoke(new Action(CloseSplit));
+        }
+    }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_splitTab is null || _splitOrientationManuallySet) return;
+        var useVertical = BrowserArea.ActualWidth < 1400;
+        if (useVertical != _splitVertical) { _splitVertical = useVertical; UpdateSplitLayout(); }
+    }
+
+    private void ToggleSplitOrientation_Click(object sender, RoutedEventArgs e)
+    {
+        _splitVertical = !_splitVertical;
+        _splitOrientationManuallySet = true;
+        UpdateSplitLayout();
+    }
+
+    private void UpdateSplitLayout()
+    {
+        if (_splitTab is null) return;
+        if (_splitVertical)
+        {
+            PrimaryColumn.Width = new GridLength(1, GridUnitType.Star); SplitterColumn.Width = SecondaryColumn.Width = new GridLength(0);
+            PrimaryRow.Height = SecondaryRow.Height = new GridLength(1, GridUnitType.Star); HorizontalSplitterRow.Height = new GridLength(5);
+            Grid.SetRow(TabContentHost, 0); Grid.SetColumn(TabContentHost, 0); Grid.SetRowSpan(TabContentHost, 1); Grid.SetColumnSpan(TabContentHost, 3);
+            Grid.SetRow(SecondaryTabContentHost, 2); Grid.SetColumn(SecondaryTabContentHost, 0); Grid.SetRowSpan(SecondaryTabContentHost, 1); Grid.SetColumnSpan(SecondaryTabContentHost, 3);
+            SplitDivider.Visibility = Visibility.Collapsed; HorizontalSplitDivider.Visibility = Visibility.Visible;
+            SplitOrientationButton.Content = "↔";
+        }
+        else
+        {
+            PrimaryColumn.Width = SecondaryColumn.Width = new GridLength(1, GridUnitType.Star); SplitterColumn.Width = new GridLength(5);
+            PrimaryRow.Height = new GridLength(1, GridUnitType.Star); HorizontalSplitterRow.Height = SecondaryRow.Height = new GridLength(0);
+            Grid.SetRow(TabContentHost, 0); Grid.SetColumn(TabContentHost, 0); Grid.SetRowSpan(TabContentHost, 3); Grid.SetColumnSpan(TabContentHost, 1);
+            Grid.SetRow(SecondaryTabContentHost, 0); Grid.SetColumn(SecondaryTabContentHost, 2); Grid.SetRowSpan(SecondaryTabContentHost, 3); Grid.SetColumnSpan(SecondaryTabContentHost, 1);
+            SplitDivider.Visibility = Visibility.Visible; HorizontalSplitDivider.Visibility = Visibility.Collapsed;
+            SplitOrientationButton.Content = "↕";
+        }
+    }
+
+    private void ResetSplitLayout()
+    {
+        PrimaryColumn.Width = new GridLength(1, GridUnitType.Star); SplitterColumn.Width = SecondaryColumn.Width = new GridLength(0);
+        PrimaryRow.Height = new GridLength(1, GridUnitType.Star); HorizontalSplitterRow.Height = SecondaryRow.Height = new GridLength(0);
+        Grid.SetRow(TabContentHost, 0); Grid.SetColumn(TabContentHost, 0); Grid.SetRowSpan(TabContentHost, 1); Grid.SetColumnSpan(TabContentHost, 1);
+        Grid.SetRow(SecondaryTabContentHost, 0); Grid.SetColumn(SecondaryTabContentHost, 2); Grid.SetRowSpan(SecondaryTabContentHost, 1); Grid.SetColumnSpan(SecondaryTabContentHost, 1);
+        SplitDivider.Visibility = HorizontalSplitDivider.Visibility = Visibility.Collapsed;
+    }
+
+    private void CloseSplit_Click(object sender, RoutedEventArgs e) => CloseSplit();
+    private void PrimaryZoomOut_Click(object sender, RoutedEventArgs e) => ViewModel.SelectedTab?.ZoomBy(-0.1);
+    private void PrimaryZoomReset_Click(object sender, RoutedEventArgs e) => ViewModel.SelectedTab?.ResetZoom();
+    private void PrimaryZoomIn_Click(object sender, RoutedEventArgs e) => ViewModel.SelectedTab?.ZoomBy(0.1);
+    private void SecondaryZoomOut_Click(object sender, RoutedEventArgs e) => _splitTab?.ZoomBy(-0.1);
+    private void SecondaryZoomReset_Click(object sender, RoutedEventArgs e) => _splitTab?.ResetZoom();
+    private void SecondaryZoomIn_Click(object sender, RoutedEventArgs e) => _splitTab?.ZoomBy(0.1);
 }
