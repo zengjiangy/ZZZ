@@ -1,4 +1,4 @@
-<Window x:Class="ZZZ.Views.SettingsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+<Window x:Class="ZZZ.Views.SettingsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Style="{StaticResource AppWindowStyle}"
         Title="{DynamicResource SettingsTitle}" Height="690" Width="760" MinHeight="560" MinWidth="650" WindowStartupLocation="CenterOwner">
     <Grid Background="{DynamicResource WindowBrush}">
         <Grid.RowDefinitions><RowDefinition Height="70"/><RowDefinition Height="*"/><RowDefinition Height="64"/></Grid.RowDefinitions>

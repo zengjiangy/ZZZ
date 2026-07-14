@@ -1,4 +1,4 @@
-<Window x:Class="ZZZ.MainWindow" x:Name="RootWindow"
+<Window x:Class="ZZZ.MainWindow" x:Name="RootWindow" Style="{StaticResource AppWindowStyle}"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="{DynamicResource AppName}" Height="780" Width="1220" MinHeight="460" MinWidth="760"
         WindowStartupLocation="CenterScreen" KeyDown="Window_KeyDown" Closing="Window_Closing">

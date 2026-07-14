@@ -1,4 +1,4 @@
-<Window x:Class="ZZZ.Views.LibraryWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+<Window x:Class="ZZZ.Views.LibraryWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Style="{StaticResource AppWindowStyle}"
         Title="{DynamicResource Library}" Height="620" Width="840" MinHeight="460" MinWidth="650" WindowStartupLocation="CenterOwner">
     <Border Background="{DynamicResource WindowBrush}" Padding="14">
         <TabControl Background="{DynamicResource WindowBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource LineBrush}">

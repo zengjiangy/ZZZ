@@ -72,7 +72,6 @@ public partial class MainWindow : Window
         else if (ctrl && e.Key == Key.W && ViewModel.SelectedTab is not null) { ViewModel.CloseTabCommand.Execute(ViewModel.SelectedTab); e.Handled = true; }
         else if ((ctrl && e.Key == Key.L) || (alt && e.Key == Key.D)) { AddressBox.Focus(); AddressBox.SelectAll(); e.Handled = true; }
         else if (ctrl && e.Key == Key.R) { ViewModel.SelectedTab?.ReloadCommand.Execute(null); e.Handled = true; }
-        else if (ctrl && shift && e.Key == Key.S) { _ = CaptureRegionAsync(); e.Handled = true; }
         else if (alt && e.Key == Key.Left) { ViewModel.SelectedTab?.BackCommand.Execute(null); e.Handled = true; }
         else if (alt && e.Key == Key.Right) { ViewModel.SelectedTab?.ForwardCommand.Execute(null); e.Handled = true; }
         else if (e.Key == Key.F12) { ViewModel.SelectedTab?.OpenDevToolsCommand.Execute(null); e.Handled = true; }
@@ -89,7 +88,6 @@ public partial class MainWindow : Window
         menu.Items.Add(new Separator());
         menu.Items.Add(Item(LocalizationService.Text("DeveloperTools"), (_, _) => ViewModel.SelectedTab?.OpenDevToolsCommand.Execute(null), "F12"));
         menu.Items.Add(Item(LocalizationService.Text("ClearBrowsingData"), async (_, _) => await ClearBrowsingDataAsync()));
-        menu.Items.Add(Item(LocalizationService.Text("RegionCapture"), async (_, _) => await CaptureRegionAsync(), "Ctrl+Shift+S"));
         var theme = new MenuItem { Header = LocalizationService.Text("Theme") };
         theme.Items.Add(ThemeItem(AppearanceMode.System, "FollowSystem"));
         theme.Items.Add(ThemeItem(AppearanceMode.Light, "Light"));
@@ -132,20 +130,6 @@ public partial class MainWindow : Window
         if (MessageBox.Show(this, LocalizationService.Text("ClearDataFinalConfirm"), LocalizationService.Text("ClearDataTitle"), MessageBoxButton.YesNo, MessageBoxImage.Stop) != MessageBoxResult.Yes) return;
         await ViewModel.Services.Privacy.ClearAsync(dialog.Selection);
         MessageBox.Show(this, LocalizationService.Text("ClearComplete"), LocalizationService.Text("ClearDataTitle"), MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-
-    private async Task CaptureRegionAsync()
-    {
-        if (ViewModel.SelectedTab is null) return;
-        var bytes = await ViewModel.SelectedTab.CaptureVisiblePageAsync();
-        if (bytes is null || bytes.Length == 0)
-        {
-            MessageBox.Show(this, LocalizationService.Text("CaptureFailed"), LocalizationService.Text("RegionCapture"), MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-        var dialog = new RegionCaptureWindow(bytes) { Owner = this };
-        if (dialog.ShowDialog() == true)
-            ViewModel.SelectedTab.Status = LocalizationService.Text("CaptureSaved");
     }
 
     private void MediaButton_Click(object sender, RoutedEventArgs e)

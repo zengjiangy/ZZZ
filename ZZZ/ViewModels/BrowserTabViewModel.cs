@@ -131,22 +131,6 @@ public partial class BrowserTabViewModel : ObservableObject
         return host.Substring(0, 19) + "…";
     }
 
-    public async Task<byte[]?> CaptureVisiblePageAsync()
-    {
-        if (_view?.CoreWebView2 is not { } core) return null;
-        try
-        {
-            using var stream = new MemoryStream();
-            await core.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream);
-            return stream.ToArray();
-        }
-        catch
-        {
-            Status = LocalizationService.Text("CaptureFailed");
-            return null;
-        }
-    }
-
     [RelayCommand] private void Back() { if (_view?.CanGoBack == true) _view.GoBack(); }
     [RelayCommand] private void Forward() { if (_view?.CanGoForward == true) _view.GoForward(); }
     [RelayCommand] private void Reload() { if (_view?.CoreWebView2 is not null) _view.Reload(); }

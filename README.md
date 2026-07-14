@@ -2,7 +2,7 @@
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF、MVVM 和 Microsoft WebView2。它使用系统安装的 WebView2 Runtime，不额外捆绑 Chromium，并支持将全部浏览数据放在 EXE 同目录以便 U 盘携带。
 
-当前版本：**1.2.1**。
+当前版本：**1.2.5**。
 
 ## Download
 
@@ -27,7 +27,6 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 - Built-in download list plus configurable external downloader and media player
 - 本机 AppData、EXE 同目录便携模式或自定义数据/Cookie 路径，并支持重启迁移
 - SVG 多分辨率图标与上次会话恢复
-- Built-in visible-page region capture with clipboard copy and PNG saving
 - A single shared browser instance accepts URLs from later launches; inactive tabs request WebView2's low-memory mode
 
 ## Private tabs
@@ -61,7 +60,6 @@ Open **Library → Userscripts** to create a script or import a `.user.js` file.
 | Ctrl+Shift+T | Reopen most recent history entry |
 | Alt+Left / Alt+Right | Back / forward |
 | F12 | Developer tools (when enabled) |
-| Ctrl+Shift+S | Capture a region of the visible page |
 
 ## Build
 

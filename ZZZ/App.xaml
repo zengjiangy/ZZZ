@@ -8,7 +8,7 @@
         <SolidColorBrush x:Key="LineBrush" Color="#FFDADCE3"/><SolidColorBrush x:Key="HoverBrush" Color="#10000000"/>
         <SolidColorBrush x:Key="PressedBrush" Color="#1D000000"/><SolidColorBrush x:Key="WebBackdropBrush" Color="#FFFFFFFF"/>
 
-        <Style TargetType="Window">
+        <Style x:Key="AppWindowStyle" TargetType="Window">
             <Setter Property="Background" Value="{DynamicResource WindowBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
             <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI"/><Setter Property="FontSize" Value="13"/>
             <Setter Property="TextOptions.TextFormattingMode" Value="Display"/><Setter Property="UseLayoutRounding" Value="True"/>
@@ -48,7 +48,38 @@
                 <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Bd" Property="BorderThickness" Value="1.5"/></Trigger></ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
-        <Style TargetType="CheckBox"><Setter Property="Margin" Value="0,7"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/></Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Margin" Value="0,7"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+                <Grid Background="Transparent">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border x:Name="Box" Width="16" Height="16" VerticalAlignment="Center" Background="{DynamicResource AddressBrush}" BorderBrush="{DynamicResource MutedBrush}" BorderThickness="1.2" CornerRadius="3">
+                        <Path x:Name="CheckMark" Visibility="Collapsed" Data="M2.5,7 L6,10.5 L13.5,2.5" Stroke="White" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                    </Border>
+                    <ContentPresenter Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" RecognizesAccessKey="True"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Box" Property="BorderThickness" Value="2"/></Trigger>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.42"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style TargetType="Slider">
+            <Setter Property="Height" Value="26"/><Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
+                <Grid Background="Transparent" Margin="1,0">
+                    <Track x:Name="PART_Track" VerticalAlignment="Center">
+                        <Track.DecreaseRepeatButton><RepeatButton Command="{x:Static Slider.DecreaseLarge}" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="4" Background="{DynamicResource AccentBrush}" CornerRadius="2"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+                        <Track.Thumb><Thumb Width="16" Height="16"><Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="{DynamicResource SurfaceBrush}" Stroke="{DynamicResource AccentBrush}" StrokeThickness="3"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+                        <Track.IncreaseRepeatButton><RepeatButton Command="{x:Static Slider.IncreaseLarge}" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="4" Background="{DynamicResource LineBrush}" CornerRadius="2"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+                    </Track>
+                </Grid>
+                <ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.42"/></Trigger></ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
         <Style TargetType="ComboBoxItem">
             <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Padding" Value="10,8"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem"><Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}" Margin="3,1"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource AccentSoftBrush}"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource AccentSoftBrush}"/><Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
