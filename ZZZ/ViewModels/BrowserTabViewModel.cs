@@ -74,7 +74,7 @@ public partial class BrowserTabViewModel : ObservableObject
     public void BeginNavigation(string target)
     {
         if (IsReaderMode && _view?.CoreWebView2 is { } core)
-            _ = core.ExecuteScriptAsync(ReaderDisableScript);
+            _ = IgnoreScriptErrorAsync(core, ReaderDisableScript);
         IsReaderMode = false;
         IsLoading = true;
         Address = target;
@@ -140,7 +140,7 @@ public partial class BrowserTabViewModel : ObservableObject
     partial void OnUrlChanged(string value)
     {
         if (IsReaderMode && _view?.CoreWebView2 is { } core)
-            _ = core.ExecuteScriptAsync(ReaderDisableScript);
+            _ = IgnoreScriptErrorAsync(core, ReaderDisableScript);
         IsReaderMode = false;
         SiteIdentity = BrowserHome.IsStartPage(value) ? LocalizationService.Text("StartPage") : IdentifySite(value);
         OnPropertyChanged(nameof(IsStartPage));
@@ -245,6 +245,12 @@ public partial class BrowserTabViewModel : ObservableObject
     private bool CanToggleReaderMode() => Uri.TryCreate(Url, UriKind.Absolute, out var uri) &&
         (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
+    private static async Task IgnoreScriptErrorAsync(CoreWebView2 core, string script)
+    {
+        try { await core.ExecuteScriptAsync(script); }
+        catch { }
+    }
+
     private const string ReaderDisableScript = @"(() => {
 document.getElementById('__zzzReaderMode')?.remove();
 document.getElementById('__zzzReaderModeStyle')?.remove();
@@ -254,18 +260,39 @@ return true;
 })();";
 
     private const string ReaderEnableScript = @"(() => {
-const id='__zzzReaderMode';
-if(document.getElementById(id)) return true;
-const score=node=>{const text=(node.innerText||'').trim();const links=Array.from(node.querySelectorAll('a')).reduce((n,a)=>n+(a.innerText||'').length,0);return text.length-links*1.5;};
-let candidates=Array.from(document.querySelectorAll('article,main,[role=main],.article,.article-body,.post,.post-content,.entry-content'));
-if(!candidates.length)candidates=Array.from(document.body.querySelectorAll('section,div')).filter(x=>(x.innerText||'').length>600).slice(0,250);
-const source=candidates.sort((a,b)=>score(b)-score(a))[0];
-if(!source||score(source)<350)return false;
-const overlay=document.createElement('div');overlay.id=id;
+const id='__zzzReaderMode',styleId='__zzzReaderModeStyle';
+if(document.getElementById(id))return true;
+if(!document.body)return false;
+const textOf=node=>(node.innerText||node.textContent||'').trim();
+const score=node=>{const text=textOf(node);let linkText=0;for(const link of node.querySelectorAll('a')){linkText+=textOf(link).length;if(linkText>text.length)break;}return text.length-linkText*.75;};
+let candidates=Array.from(document.querySelectorAll('article,main,[role=main],[itemprop=articleBody],#article-body,#mw-content-text,.mw-parser-output,.article,.article-body,.article-content,.story-body,.post,.post-content,.entry-content')).slice(0,200);
+if(!candidates.length){candidates=[];for(const node of document.body.querySelectorAll('section,div')){if(textOf(node).length>600)candidates.push(node);if(candidates.length>=250)break;}}
+let source=null,best=350;for(const candidate of candidates){const value=score(candidate);if(value>best){source=candidate;best=value;}}
+if(!source)return false;
+const overlay=document.createElement('main');overlay.id=id;
 const heading=document.createElement('h1');heading.textContent=document.title||location.hostname;overlay.appendChild(heading);
-const content=source.cloneNode(true);content.querySelectorAll('script,style,noscript,nav,aside,form,button,input,textarea,select,iframe').forEach(x=>x.remove());overlay.appendChild(content);
-const style=document.createElement('style');style.id='__zzzReaderModeStyle';style.textContent=`html.__zzzReaderActive,body.__zzzReaderActive{background:#f5f1e8!important;color:#25221d!important;overflow:auto!important}body.__zzzReaderActive>:not(#__zzzReaderMode){display:none!important}#__zzzReaderMode{display:block!important;box-sizing:border-box!important;max-width:780px!important;margin:0 auto!important;padding:56px 34px 90px!important;background:#f5f1e8!important;color:#25221d!important;font:20px/1.75 Georgia,'Times New Roman',serif!important}#__zzzReaderMode h1{font:700 38px/1.2 system-ui,sans-serif!important;margin:0 0 36px!important;color:#171512!important}#__zzzReaderMode img,#__zzzReaderMode video{max-width:100%!important;height:auto!important}#__zzzReaderMode a{color:#315c8c!important}#__zzzReaderMode pre{white-space:pre-wrap!important;overflow-wrap:anywhere!important}#__zzzReaderMode p{margin:0 0 1.2em!important}@media(prefers-color-scheme:dark){html.__zzzReaderActive,body.__zzzReaderActive,#__zzzReaderMode{background:#1f2023!important;color:#e7e2d8!important}#__zzzReaderMode h1{color:#fff!important}#__zzzReaderMode a{color:#9fc5ef!important}}`;
-(document.head||document.documentElement).appendChild(style);document.documentElement.classList.add('__zzzReaderActive');document.body.classList.add('__zzzReaderActive');document.body.appendChild(overlay);window.scrollTo(0,0);return true;
+const article=document.createElement('article');overlay.appendChild(article);
+const allowed=new Set(['P','H1','H2','H3','H4','H5','H6','BLOCKQUOTE','PRE','CODE','UL','OL','LI','DL','DT','DD','FIGURE','FIGCAPTION','IMG','A','STRONG','B','EM','I','BR','HR','TABLE','THEAD','TBODY','TR','TH','TD']);
+const blocked=new Set(['SCRIPT','STYLE','NOSCRIPT','NAV','ASIDE','FORM','BUTTON','INPUT','TEXTAREA','SELECT','OPTION','IFRAME','OBJECT','EMBED','SVG','CANVAS','VIDEO','AUDIO']);
+let nodes=0,characters=0;
+const copy=(node,parent,depth)=>{
+ if(nodes>=2500||characters>=250000||depth>80)return;
+ if(node.nodeType===Node.TEXT_NODE){const value=(node.nodeValue||'').slice(0,Math.max(0,250000-characters));if(value){parent.appendChild(document.createTextNode(value));characters+=value.length;}return;}
+ if(node.nodeType!==Node.ELEMENT_NODE)return;
+ const tag=node.tagName;if(blocked.has(tag)||node.hidden||node.getAttribute('aria-hidden')==='true')return;
+ nodes++;
+ const target=document.createElement(allowed.has(tag)?tag.toLowerCase():'div');
+ if(tag==='A'){const href=node.href||'';if(/^https?:/i.test(href))target.setAttribute('href',href);target.setAttribute('rel','noreferrer noopener');}
+ if(tag==='IMG'){const src=node.currentSrc||node.src||'';if(/^https?:/i.test(src)){target.setAttribute('src',src);target.setAttribute('loading','lazy');}const alt=node.getAttribute('alt');if(alt)target.setAttribute('alt',alt);}
+ parent.appendChild(target);
+ for(const child of node.childNodes){copy(child,target,depth+1);if(nodes>=2500||characters>=250000)break;}
+};
+try{
+ copy(source,article,0);
+ if(characters<350){overlay.remove();return false;}
+ const style=document.createElement('style');style.id=styleId;style.textContent=`html.__zzzReaderActive,body.__zzzReaderActive{background:#f5f1e8!important;color:#25221d!important;overflow:auto!important}body.__zzzReaderActive>:not(#__zzzReaderMode){display:none!important}#__zzzReaderMode{display:block!important;box-sizing:border-box!important;max-width:780px!important;margin:0 auto!important;padding:56px 34px 90px!important;background:#f5f1e8!important;color:#25221d!important;font:20px/1.75 Georgia,'Times New Roman',serif!important}#__zzzReaderMode h1{font:700 38px/1.2 system-ui,sans-serif!important;margin:0 0 36px!important;color:#171512!important}#__zzzReaderMode img{display:block!important;max-width:100%!important;height:auto!important;margin:1.2em auto!important}#__zzzReaderMode a{color:#315c8c!important}#__zzzReaderMode pre{white-space:pre-wrap!important;overflow-wrap:anywhere!important}#__zzzReaderMode p{margin:0 0 1.2em!important}#__zzzReaderMode table{display:block!important;max-width:100%!important;overflow:auto!important}@media(prefers-color-scheme:dark){html.__zzzReaderActive,body.__zzzReaderActive,#__zzzReaderMode{background:#1f2023!important;color:#e7e2d8!important}#__zzzReaderMode h1{color:#fff!important}#__zzzReaderMode a{color:#9fc5ef!important}}`;
+ (document.head||document.documentElement).appendChild(style);document.documentElement.classList.add('__zzzReaderActive');document.body.classList.add('__zzzReaderActive');document.body.appendChild(overlay);window.scrollTo(0,0);return true;
+}catch(error){overlay.remove();document.getElementById(styleId)?.remove();document.documentElement.classList.remove('__zzzReaderActive');document.body.classList.remove('__zzzReaderActive');return false;}
 })();";
 
     public void Print() => _view?.CoreWebView2?.ShowPrintUI(CoreWebView2PrintDialogKind.System);

@@ -25,6 +25,7 @@ public partial class LibraryWindow : Window
         if (_scripts.Count > 0) ScriptsGrid.SelectedIndex = 0;
     }
     private void OpenBookmark_Click(object sender, RoutedEventArgs e) { if (BookmarksGrid.SelectedItem is Bookmark b) { _main.CreateTab(b.Url); Close(); } }
+    private void BookmarksGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => OpenBookmark_Click(sender, e);
     private async void RemoveBookmark_Click(object sender, RoutedEventArgs e) { if (BookmarksGrid.SelectedItem is Bookmark b) { await _main.Services.Bookmarks.RemoveAsync(b); RefreshBookmarkGroups(); } }
     private async void SaveBookmarks_Click(object sender, RoutedEventArgs e)
     {
