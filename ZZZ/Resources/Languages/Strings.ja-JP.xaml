@@ -40,4 +40,18 @@
     <sys:String x:Key="CustomRules">カスタム ブロック ルール</sys:String><sys:String x:Key="CustomRulesHint">1 行に 1 つの ABP 互換ルールを入力します。「この広告をブロック」で作成したルールもここに表示されます。</sys:String><sys:String x:Key="ActiveRuleSummary">ネットワーク ルール {0:N0} 件 · 要素非表示ルール {1:N0} 件 · 無視 {2:N0} 件</sys:String>
     <sys:String x:Key="BlockThisAd">この広告をブロック</sys:String><sys:String x:Key="AdElementBlocked">広告要素をブロックし、ルールを保存しました。</sys:String><sys:String x:Key="AdElementBlockFailed">この要素に対する安全なブロック ルールを作成できませんでした。</sys:String><sys:String x:Key="AdBlockReloadHint">すべての要素非表示ルールを反映するには、購読の変更後に開いているページを再読み込みしてください。</sys:String><sys:String x:Key="AdBlockSaveFailed">広告ブロック設定を保存できませんでした。</sys:String>
     <sys:String x:Key="RestoreSessionPrompt">前回のページを復元しますか？</sys:String><sys:String x:Key="Restore">復元</sys:String><sys:String x:Key="NotNow">後で</sys:String><sys:String x:Key="AdBlockPickerUnavailable">広告選択機能を初期化できませんでした。</sys:String>
+    <sys:String x:Key="RestoreLastSessionSetting">前回のセッションを記録して復元を確認</sys:String><sys:String x:Key="RestoreLastSessionHint">オフにすると通常タブのセッションは記録されません。プライベートタブは常に記録されません。</sys:String>
+    <sys:String x:Key="GrayscaleMode">グレースケール モード</sys:String><sys:String x:Key="GrayscaleHint">アプリ全体とすべての Web ページをグレースケールで表示します。</sys:String>
+    <sys:String x:Key="About">このアプリについて</sys:String><sys:String x:Key="ApplicationVersion">アプリのバージョン</sys:String><sys:String x:Key="WebViewRuntimeVersion">WebView2 Runtime のバージョン</sys:String><sys:String x:Key="LocalBrowserFingerprint">ローカル ブラウザー フィンガープリント</sys:String><sys:String x:Key="FingerprintPrivacyHint">このフィンガープリントはローカルでの確認用にのみ表示され、自動的にアップロードされません。</sys:String>
+    <sys:String x:Key="OperatingSystem">オペレーティング システム</sys:String><sys:String x:Key="Architecture">アーキテクチャ</sys:String><sys:String x:Key="Framework">.NET Framework</sys:String><sys:String x:Key="ProcessorCount">プロセッサ数</sys:String><sys:String x:Key="StorageLocation">保存場所</sys:String><sys:String x:Key="UserAgentMode">User-Agent モード</sys:String>
+    <sys:String x:Key="ProjectAddress">プロジェクト URL</sys:String><sys:String x:Key="UpdateAddress">更新 URL</sys:String>
+    <sys:String x:Key="ReadingMode">リーダー モード</sys:String><sys:String x:Key="ExitReadingMode">リーダー モードを終了</sys:String><sys:String x:Key="ReaderModeUnavailable">このページではリーダー モードを利用できません。</sys:String>
+    <sys:String x:Key="TermsTitle">利用規約</sys:String><sys:String x:Key="TermsIntro">ZZZ ブラウザーを使用する前に、以下の簡単な規約をご確認ください。</sys:String>
+    <sys:String x:Key="TermsUseHeading">適正な利用</sys:String><sys:String x:Key="TermsUseBody">本ソフトウェアは法令を守り、他者の権利を侵害しない範囲で使用してください。</sys:String>
+    <sys:String x:Key="TermsPrivacyHeading">ローカル データとプライバシー</sys:String><sys:String x:Key="TermsPrivacyBody">設定、ブックマーク、履歴などのブラウザー データは、選択したローカルの保存場所に保存されます。プライベート タブは端末上の痕跡を減らしますが、インターネット上の匿名性を保証するものではありません。</sys:String>
+    <sys:String x:Key="TermsThirdPartyHeading">第三者サービス</sys:String><sys:String x:Key="TermsThirdPartyBody">Web サイトの閲覧や検索、翻訳、フィルター購読の利用時には第三者へ接続し、その利用規約とプライバシー ポリシーが適用されます。</sys:String>
+    <sys:String x:Key="TermsDisclaimerHeading">免責事項</sys:String><sys:String x:Key="TermsDisclaimerBody">本オープンソース ソフトウェアは、いかなる保証もなく「現状のまま」提供されます。法令で認められる範囲において、作者はデータ損失、第三者のコンテンツ、間接的損害について責任を負いません。</sys:String>
+    <sys:String x:Key="TermsAcceptance">「同意して続行」を選択すると、本規約を理解し同意したものとみなされます。</sys:String><sys:String x:Key="AgreeAndContinue">同意して続行</sys:String><sys:String x:Key="ExitApplication">アプリを終了</sys:String>
+    <sys:String x:Key="BackgroundServicesDegraded">一部のバックグラウンド データを読み込めなかったため、ブラウザーは縮退モードで動作を続けています。</sys:String><sys:String x:Key="UnknownValue">不明</sys:String><sys:String x:Key="Unavailable">利用不可</sys:String>
+    <sys:String x:Key="CustomUserAgentHidden">カスタム（値は非表示）</sys:String><sys:String x:Key="OsArchitecture">OS アーキテクチャ</sys:String><sys:String x:Key="ProcessArchitecture">プロセス アーキテクチャ</sys:String>
 </ResourceDictionary>

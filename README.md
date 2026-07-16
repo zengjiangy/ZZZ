@@ -1,10 +1,10 @@
 # ZZZ 浏览器
 
-[简体中文](README.md) | [English](README.en.md)
+[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [한국어](README.ko.md) | [繁體中文](README.zh-TW.md)
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF 和 Microsoft WebView2 构建。它使用系统中的 WebView2 Runtime，不额外捆绑 Chromium，并支持把浏览器数据存放在程序目录中，方便随身携带。
 
-当前版本：**1.9.6**
+当前版本：**2.0.0**
 
 ## 下载与运行
 
@@ -12,8 +12,9 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 
 | 文件 | 适用平台 |
 |---|---|
-| `ZZZ-v1.9.6-win-x64.exe` | Windows x64 原生版本 |
-| `ZZZ-v1.9.6-win-arm64.exe` | Windows ARM64 原生版本 |
+| `ZZZ-v2.0.0-win-x64.exe` | Windows x64 原生版本 |
+| `ZZZ-v2.0.0-win-x86.exe` | Windows 10 x86 32 位兼容版；也可在 Windows 10 on Arm 上以 x86 仿真运行 |
+| `ZZZ-v2.0.0-win-arm64.exe` | Windows ARM64 原生版本 |
 
 下载后直接运行即可，无需安装。系统需要：
 
@@ -33,7 +34,9 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 - 地址栏统一处理网址与搜索，支持历史记录匹配和实时搜索联想
 - 原生轻量启动页，可使用纯色、图片或动态 GIF 背景，并按分组展示书签
 - F11 沉浸式全屏、页内查找、打印，以及将网页保存为 PDF 或 MHT
-- 应用和网页明暗主题；启动页会根据背景亮度自动调整文字和面板对比度
+- F9 阅读模式、全应用黑白模式，以及应用和网页明暗主题；启动页会根据背景亮度自动调整文字和面板对比度
+- 可选择是否记录并提示恢复上次普通标签会话；记录独立于历史数据且从不包含隐私标签
+- 首次运行先显示简短使用条款；同意状态只保存在本地，拒绝不会启动网页
 
 ### 书签与数据
 
@@ -105,6 +108,7 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 | `Ctrl+Shift+W` | 退出当前分屏 |
 | `Ctrl+Shift+T` | 打开最近一条历史记录 |
 | `Alt+Left` / `Alt+Right` | 后退 / 前进 |
+| `F9` | 切换阅读模式 |
 | `F11` | 全屏 |
 | `F12` | 开发者工具（需在设置中启用） |
 
@@ -114,7 +118,15 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 dotnet build ZZZ.sln -c Release
 ```
 
-x64 版本输出位于 `ZZZ\bin\Release\net48\ZZZ.exe`。托管依赖以及 x64、ARM64 WebView2 原生加载器会嵌入到对应的单文件 EXE 中；项目不再包含 32 位加载器。
+x64 版本输出位于 `ZZZ\bin\Release\net48\ZZZ.exe`。托管依赖以及 x86、x64、ARM64 WebView2 原生加载器会嵌入到对应架构的单文件 EXE 中。
+
+x86 32 位兼容构建：
+
+```powershell
+dotnet build ZZZ\ZZZ.csproj -c Release -p:PlatformTarget=x86 -p:OutputPath=outputs\win-x86\
+```
+
+WebView2 不提供 ARM32 Runtime 或 Loader；Windows 10 on Arm 需要 32 位兼容程序时请使用上述 x86 构建（系统 x86 仿真），原生性能请选择 ARM64 构建。
 
 ARM64 构建命令：
 

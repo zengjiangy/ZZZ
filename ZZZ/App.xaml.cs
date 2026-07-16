@@ -1,6 +1,7 @@
 using System.Windows;
 using ZZZ.Services;
 using ZZZ.ViewModels;
+using ZZZ.Views;
 
 namespace ZZZ;
 
@@ -21,17 +22,28 @@ public partial class App : Application
             return;
         }
         DevToolsPreferenceService.SuppressObsoleteWebHintBanner();
-        NativeDependencyService.PrepareWebView2Loader();
         EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler(Window_Loaded));
         Services = new AppServices();
         await Services.InitializeAsync();
         LocalizationService.Apply(Services.Settings.Current.Ui.Language);
-        ThemeService.Apply(Services.Settings.Current.Appearance, Services.Settings.Current.StartPage);
+        ThemeService.Apply(Services.Settings.Current.Appearance, Services.Settings.Current.StartPage, Services.Settings.Current.Ui.GrayscaleMode);
+        if (!string.Equals(Services.Settings.Current.Legal.AcceptedTermsVersion, TermsWindow.CurrentTermsVersion, StringComparison.Ordinal))
+        {
+            var terms = new TermsWindow();
+            if (terms.ShowDialog() != true)
+            {
+                Shutdown();
+                return;
+            }
+            Services.Settings.Current.Legal.AcceptedTermsVersion = TermsWindow.CurrentTermsVersion;
+            await Services.Settings.SaveAsync();
+        }
         var launchUrls = e.Args.Select(SingleInstanceService.NormalizeTarget).Where(x => x is not null).Cast<string>().ToArray();
         var viewModel = new MainViewModel(Services, launchUrls);
         var window = new MainWindow { DataContext = viewModel };
         MainWindow = window;
         window.Show();
+        _ = Dispatcher.BeginInvoke(new Action(() => _ = Services.EnsureBackgroundInitializedAsync()), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         _singleInstance.StartListening(url => Dispatcher.BeginInvoke(new Action(() =>
         {
             viewModel.CreateTab(url);
@@ -45,15 +57,10 @@ public partial class App : Application
         if (sender is Window window) ThemeService.ApplyWindowChrome(window);
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    protected override void OnExit(ExitEventArgs e)
     {
         if (Services is not null)
-        {
-            await Services.Session.SaveAsync(Services.Tabs.Items.Select(x => (x.Url, x.IsPrivate)));
-            await Services.Privacy.ClearOnExitAsync();
-            await Services.Settings.SaveAsync();
             Services.Dispose();
-        }
         _singleInstance?.Dispose();
         base.OnExit(e);
     }

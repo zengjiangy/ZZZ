@@ -18,6 +18,8 @@ public partial class StartPageView : UserControl
     private IReadOnlyList<BitmapSource> _frames = [];
     private IReadOnlyList<TimeSpan> _delays = [];
     private int _frameIndex;
+    private bool _isLoaded;
+    private int _backgroundLoadRevision;
 
     public StartPageView(BrowserTabViewModel tab)
     {
@@ -27,6 +29,7 @@ public partial class StartPageView : UserControl
 
     private void UserControl_Loaded(object sender, RoutedEventArgs e)
     {
+        _isLoaded = true;
         ApplySettings();
         App.Services.Bookmarks.Changed += Bookmarks_Changed;
         SearchBox.Focus();
@@ -34,6 +37,8 @@ public partial class StartPageView : UserControl
 
     private void UserControl_Unloaded(object sender, RoutedEventArgs e)
     {
+        _isLoaded = false;
+        _backgroundLoadRevision++;
         App.Services.Bookmarks.Changed -= Bookmarks_Changed;
         StopAnimation();
     }
@@ -44,16 +49,27 @@ public partial class StartPageView : UserControl
         Color background;
         try { background = (Color)ColorConverter.ConvertFromString(settings.BackgroundColor); }
         catch { background = Color.FromRgb(16, 24, 38); }
+        if (App.Services.Settings.Current.Ui.GrayscaleMode) background = ToGrayscale(background);
         Root.Background = new SolidColorBrush(background);
         BackgroundImage.Opacity = Math.Max(0.1, Math.Min(1, settings.BackgroundOpacity));
         BookmarksList.Visibility = settings.ShowBookmarks ? Visibility.Visible : Visibility.Collapsed;
         RefreshBookmarks();
-        var hasImage = LoadBackground(AppPaths.ResolveDataFile(settings.BackgroundImage));
-        ApplyContrast(background, hasImage);
+        StopAnimation();
+        BackgroundImage.Source = null;
+        ApplyContrast(background, false, 0);
+        var path = AppPaths.ResolveDataFile(settings.BackgroundImage);
+        var revision = ++_backgroundLoadRevision;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!_isLoaded || revision != _backgroundLoadRevision) return;
+            var hasImage = LoadBackground(path, out var imageLuminance);
+            ApplyContrast(background, hasImage, imageLuminance);
+        }), DispatcherPriority.ApplicationIdle);
     }
 
-    private bool LoadBackground(string path)
+    private bool LoadBackground(string path, out double imageLuminance)
     {
+        imageLuminance = 0;
         StopAnimation();
         BackgroundImage.Source = null;
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return false;
@@ -68,9 +84,10 @@ public partial class StartPageView : UserControl
                 var scale = Math.Min(1d, 1280d / Math.Max(1, first.PixelWidth));
                 var pixelsPerFrame = Math.Max(1d, first.PixelWidth * scale * first.PixelHeight * scale);
                 var frameBudget = Math.Max(1, Math.Min(90, (int)(24_000_000d / pixelsPerFrame)));
-                _frames = decoder.Frames.Take(frameBudget).Select(x => ScaleForDisplay(x, 1280)).ToArray();
+                _frames = decoder.Frames.Take(frameBudget).Select(x => PrepareForDisplay(ScaleForDisplay(x, 1280))).ToArray();
                 _delays = decoder.Frames.Take(_frames.Count).Select(ReadDelay).ToArray();
                 if (_frames.Count == 0) return false;
+                imageLuminance = EstimateLuminance(_frames[0]);
                 BackgroundImage.Source = _frames[0];
                 if (_frames.Count > 1) StartAnimation();
                 return true;
@@ -83,7 +100,9 @@ public partial class StartPageView : UserControl
             bitmap.UriSource = new Uri(path, UriKind.Absolute);
             bitmap.EndInit();
             bitmap.Freeze();
-            BackgroundImage.Source = bitmap;
+            var prepared = PrepareForDisplay(bitmap);
+            imageLuminance = EstimateLuminance(prepared);
+            BackgroundImage.Source = prepared;
             return true;
         }
         catch
@@ -95,13 +114,53 @@ public partial class StartPageView : UserControl
         }
     }
 
-    private void ApplyContrast(Color background, bool hasImage)
+    private void ApplyContrast(Color background, bool hasImage, double imageLuminance)
     {
-        var useDarkText = !hasImage && RelativeLuminance(background) > 0.42;
+        var useDarkText = hasImage ? imageLuminance > 0.62 : RelativeLuminance(background) > 0.42;
         Resources["StartPageForegroundBrush"] = new SolidColorBrush(useDarkText ? Color.FromRgb(16, 24, 38) : Colors.White);
         Resources["StartPagePanelBrush"] = new SolidColorBrush(useDarkText ? Color.FromArgb(224, 255, 255, 255) : Color.FromArgb(217, 32, 39, 51));
         Resources["StartPageBorderBrush"] = new SolidColorBrush(useDarkText ? Color.FromArgb(72, 16, 24, 38) : Color.FromArgb(68, 255, 255, 255));
-        BackgroundScrim.Background = new SolidColorBrush(hasImage ? Color.FromArgb(76, 0, 0, 0) : Colors.Transparent);
+        BackgroundScrim.Background = new SolidColorBrush(hasImage
+            ? useDarkText ? Color.FromArgb(40, 255, 255, 255) : Color.FromArgb(76, 0, 0, 0)
+            : Colors.Transparent);
+    }
+
+    private static BitmapSource PrepareForDisplay(BitmapSource source)
+    {
+        if (!App.Services.Settings.Current.Ui.GrayscaleMode) return source;
+        var converted = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+        var stride = converted.PixelWidth * 4;
+        var pixels = new byte[stride * converted.PixelHeight];
+        converted.CopyPixels(pixels, stride, 0);
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            var gray = (byte)Math.Round(0.0722 * pixels[i] + 0.7152 * pixels[i + 1] + 0.2126 * pixels[i + 2]);
+            pixels[i] = pixels[i + 1] = pixels[i + 2] = gray;
+        }
+        var result = BitmapSource.Create(converted.PixelWidth, converted.PixelHeight, converted.DpiX, converted.DpiY, PixelFormats.Bgra32, null, pixels, stride);
+        result.Freeze();
+        return result;
+    }
+
+    private static double EstimateLuminance(BitmapSource source)
+    {
+        var scale = Math.Min(1d, 64d / Math.Max(source.PixelWidth, source.PixelHeight));
+        BitmapSource sample = scale < 1 ? new TransformedBitmap(source, new ScaleTransform(scale, scale)) : source;
+        var converted = new FormatConvertedBitmap(sample, PixelFormats.Bgra32, null, 0);
+        var stride = converted.PixelWidth * 4;
+        var pixels = new byte[stride * converted.PixelHeight];
+        converted.CopyPixels(pixels, stride, 0);
+        if (pixels.Length == 0) return 0;
+        double total = 0;
+        for (var i = 0; i < pixels.Length; i += 4)
+            total += (0.0722 * pixels[i] + 0.7152 * pixels[i + 1] + 0.2126 * pixels[i + 2]) / 255d;
+        return total / (pixels.Length / 4d);
+    }
+
+    private static Color ToGrayscale(Color color)
+    {
+        var gray = (byte)Math.Round(0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B);
+        return Color.FromArgb(color.A, gray, gray, gray);
     }
 
     private static double RelativeLuminance(Color color)

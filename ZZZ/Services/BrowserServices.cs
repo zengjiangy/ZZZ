@@ -102,7 +102,7 @@ public interface IBrowserLifecycleService : IDisposable
 {
     event Action<string, bool>? NewTabRequested;
     event EventHandler<BrowserShortcutEventArgs>? ShortcutRequested;
-    Task InitializeAsync(WebView2 view, BrowserTabViewModel tab);
+    Task InitializeAsync(WebView2 view, BrowserTabViewModel tab, CancellationToken cancellationToken = default);
     Task ApplyCurrentSettingsAsync(bool reloadPages);
     void SetActive(BrowserTabViewModel? activeTab);
     void Sleep(BrowserTabViewModel tab);
@@ -130,6 +130,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private readonly ITranslationService _translation;
     private readonly Dictionary<BrowserTabViewModel, WeakReference<WebView2>> _views = [];
     private readonly Dictionary<CoreWebView2, string> _darkScriptIds = [];
+    private readonly Dictionary<CoreWebView2, string> _grayscaleScriptIds = [];
     private readonly Dictionary<CoreWebView2, string> _webRtcScriptIds = [];
     private readonly Dictionary<CoreWebView2, string> _userScriptIds = [];
     private readonly Dictionary<CoreWebView2, UserScriptBridge> _scriptBridges = [];
@@ -137,10 +138,15 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private readonly Dictionary<CoreWebView2, AdBlockElementPickerSession> _adBlockPickers = [];
     private readonly Dictionary<BrowserTabViewModel, CoreWebView2Environment> _tabEnvironments = [];
     private readonly object _environmentGate = new();
+    private readonly object _initializationGate = new();
+    private readonly Dictionary<BrowserTabViewModel, WebView2> _initializingViews = [];
     private readonly string _privateDataPath = Path.Combine(AppPaths.PrivateWebViewRoot, Guid.NewGuid().ToString("N"));
     private Task<CoreWebView2Environment>? _environmentTask;
     private Task<CoreWebView2Environment>? _privateEnvironmentTask;
     private bool _runtimeUpdateNotified;
+    private volatile bool _isShuttingDown;
+    private int _pendingInitializations;
+    private TaskCompletionSource<bool>? _initializationsDrained;
     public event Action<string, bool>? NewTabRequested;
     public event EventHandler<BrowserShortcutEventArgs>? ShortcutRequested;
 
@@ -149,15 +155,16 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     {
         _settings = settings; _adBlock = adBlock; _scripts = scripts; _history = history; _downloads = downloads; _privacy = privacy; _translation = translation;
         _adBlock.RulesChanged += AdBlock_RulesChanged;
-        CleanupStalePrivateData();
     }
 
     private void AdBlock_RulesChanged(object? sender, EventArgs e)
     {
+        if (_isShuttingDown) return;
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null) return;
         dispatcher.BeginInvoke(new Action(async () =>
         {
+            if (_isShuttingDown) return;
             foreach (var weak in _views.Values.ToArray())
             {
                 if (!weak.TryGetTarget(out var view) || view.CoreWebView2 is not { } core) continue;
@@ -167,28 +174,81 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         }));
     }
 
-    public async Task InitializeAsync(WebView2 view, BrowserTabViewModel tab)
+    public async Task InitializeAsync(WebView2 view, BrowserTabViewModel tab, CancellationToken cancellationToken = default)
     {
-        if (view.CoreWebView2 is not null) { tab.Attach(view); return; }
-        var environment = await GetEnvironmentAsync(tab.IsPrivate && _settings.Current.Privacy.StrictPrivateTabs);
-        if (tab.IsPrivate)
+        EnterInitialization(view, tab, cancellationToken);
+        try
         {
-            var options = environment.CreateCoreWebView2ControllerOptions();
-            options.ProfileName = $"Private_{tab.Id}";
-            options.IsInPrivateModeEnabled = true;
-            await view.EnsureCoreWebView2Async(environment, options);
+            ThrowIfInitializationStopped(tab, cancellationToken);
+            if (view.CoreWebView2 is not null) { tab.Attach(view); return; }
+            NativeDependencyService.PrepareWebView2Loader();
+            var environment = await GetEnvironmentAsync(tab.IsPrivate && _settings.Current.Privacy.StrictPrivateTabs);
+            ThrowIfInitializationStopped(tab, cancellationToken);
+            if (tab.IsPrivate)
+            {
+                var options = environment.CreateCoreWebView2ControllerOptions();
+                options.ProfileName = $"Private_{tab.Id}";
+                options.IsInPrivateModeEnabled = true;
+                await view.EnsureCoreWebView2Async(environment, options);
+            }
+            else
+            {
+                await view.EnsureCoreWebView2Async(environment);
+            }
+            ThrowIfInitializationStopped(tab, cancellationToken);
+            var core = view.CoreWebView2!;
+            _views[tab] = new WeakReference<WebView2>(view);
+            _tabEnvironments[tab] = environment;
+            tab.Attach(view);
+            view.PreviewKeyDown += (_, e) => OnWebViewPreviewKeyDown(tab, e);
+            await ConfigureAsync(core, tab, cancellationToken);
+            ThrowIfInitializationStopped(tab, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(tab.Url)) view.Source = new Uri(tab.Url);
         }
-        else
+        catch
         {
-            await view.EnsureCoreWebView2Async(environment);
+            if (_views.ContainsKey(tab)) Sleep(tab);
+            else
+            {
+                tab.Detach();
+                try { view.Dispose(); } catch { }
+            }
+            throw;
         }
-        var core = view.CoreWebView2!;
-        _views[tab] = new WeakReference<WebView2>(view);
-        _tabEnvironments[tab] = environment;
-        tab.Attach(view);
-        view.PreviewKeyDown += (_, e) => OnWebViewPreviewKeyDown(tab, e);
-        await ConfigureAsync(core, tab);
-        if (!string.IsNullOrWhiteSpace(tab.Url)) view.Source = new Uri(tab.Url);
+        finally { ExitInitialization(view, tab); }
+    }
+
+    private void EnterInitialization(WebView2 view, BrowserTabViewModel tab, CancellationToken cancellationToken)
+    {
+        lock (_initializationGate)
+        {
+            ThrowIfInitializationStopped(tab, cancellationToken);
+            if (_pendingInitializations++ == 0)
+                _initializationsDrained = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _initializingViews[tab] = view;
+        }
+    }
+
+    private void ExitInitialization(WebView2 view, BrowserTabViewModel tab)
+    {
+        lock (_initializationGate)
+        {
+            if (_initializingViews.TryGetValue(tab, out var current) && ReferenceEquals(current, view))
+                _initializingViews.Remove(tab);
+            if (--_pendingInitializations == 0) _initializationsDrained?.TrySetResult(true);
+        }
+    }
+
+    private void ThrowIfInitializationStopped(BrowserTabViewModel tab, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_isShuttingDown || tab.IsClosed) throw new OperationCanceledException("Browser initialization was cancelled.");
+    }
+
+    public Task WaitForPendingInitializationsAsync()
+    {
+        lock (_initializationGate)
+            return _pendingInitializations == 0 ? Task.CompletedTask : _initializationsDrained!.Task;
     }
 
     private void OnWebViewPreviewKeyDown(BrowserTabViewModel tab, KeyEventArgs e)
@@ -204,7 +264,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         if (request.Handled) e.Handled = true;
     }
 
-    private async Task ConfigureAsync(CoreWebView2 core, BrowserTabViewModel tab)
+    private async Task ConfigureAsync(CoreWebView2 core, BrowserTabViewModel tab, CancellationToken cancellationToken)
     {
         var cfg = _settings.Current;
         core.Settings.AreDevToolsEnabled = cfg.Advanced.EnableDeveloperTools;
@@ -253,9 +313,15 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
             try { e.Frame.AddHostObjectToScript("zzzUserscript", bridge, new[] { "*" }); } catch { }
         };
         await RegisterDarkModeAsync(core);
+        ThrowIfInitializationStopped(tab, cancellationToken);
+        await RegisterGrayscaleModeAsync(core);
+        ThrowIfInitializationStopped(tab, cancellationToken);
         await RegisterWebRtcProtectionAsync(core);
+        ThrowIfInitializationStopped(tab, cancellationToken);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(LocationBootstrap);
+        ThrowIfInitializationStopped(tab, cancellationToken);
         await RegisterUserScriptsAsync(core);
+        ThrowIfInitializationStopped(tab, cancellationToken);
         try
         {
             var picker = await AdBlockElementPicker.AttachAsync(
@@ -277,6 +343,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
                 },
                 url => _settings.Current.Advanced.EnableAdBlock ? _adBlock.GetCosmeticCss(url) : string.Empty);
             _adBlockPickers[core] = picker;
+            ThrowIfInitializationStopped(tab, cancellationToken);
         }
         catch { tab.Status = LocalizationService.Text("AdBlockPickerUnavailable"); }
     }
@@ -358,12 +425,16 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         tab.CanGoBack = core.CanGoBack;
         tab.CanGoForward = core.CanGoForward;
         if (!e.IsSuccess) { tab.Status = $"Navigation error: {e.WebErrorStatus}"; return; }
+        if (_isShuttingDown) return;
         tab.Status = string.Empty;
-        if (!tab.IsPrivate) await _history.AddAsync(tab.Title, tab.Url);
+        if (!tab.IsPrivate)
+            try { await _history.AddAsync(tab.Title, tab.Url); }
+            catch { /* History IO must never tear down the UI dispatcher. */ }
         var cfg = _settings.Current;
         if (cfg.Advanced.EnableAdBlock) await ApplyCosmeticRulesAsync(core, tab.Url);
         var darkScript = WebDarkModeService.ScriptFor(ThemeService.EffectiveWebDarkMode(cfg));
         if (darkScript.Length > 0) await SafeScript(core, darkScript);
+        if (cfg.Ui.GrayscaleMode) await SafeScript(core, GrayscaleScript(true));
         if (cfg.Browser.AutoTranslateForeignPages && cfg.Browser.TranslationProvider == TranslationProvider.Microsoft)
         {
             try
@@ -517,6 +588,25 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
         if (script.Length > 0) _darkScriptIds[core] = await core.AddScriptToExecuteOnDocumentCreatedAsync(script);
     }
 
+    private async Task RegisterGrayscaleModeAsync(CoreWebView2 core)
+    {
+        if (_grayscaleScriptIds.TryGetValue(core, out var oldId))
+        {
+            _grayscaleScriptIds.Remove(core);
+            try { core.RemoveScriptToExecuteOnDocumentCreated(oldId); } catch { }
+        }
+        if (_settings.Current.Ui.GrayscaleMode)
+            _grayscaleScriptIds[core] = await core.AddScriptToExecuteOnDocumentCreatedAsync(GrayscaleScript(true));
+        await SafeScript(core, GrayscaleScript(_settings.Current.Ui.GrayscaleMode));
+    }
+
+    private static string GrayscaleScript(bool enabled) => $@"(() => {{
+const id='__zzzGrayscaleMode'; let style=document.getElementById(id);
+if (!{(enabled ? "true" : "false")}) {{ if(style) style.remove(); return; }}
+if(!style){{style=document.createElement('style');style.id=id;(document.head||document.documentElement).appendChild(style);}}
+style.textContent='html{{filter:grayscale(1)!important}}';
+}})();";
+
     private async Task RegisterWebRtcProtectionAsync(CoreWebView2 core)
     {
         if (_webRtcScriptIds.TryGetValue(core, out var oldId))
@@ -578,7 +668,7 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
         return environment;
     }
 
-    private void CleanupStalePrivateData()
+    internal void CleanupStalePrivateData()
     {
         try
         {
@@ -602,6 +692,7 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
             var userAgent = ResolveUserAgent(_settings.Current.Browser);
             core.Settings.UserAgent = userAgent;
             await RegisterDarkModeAsync(core);
+            await RegisterGrayscaleModeAsync(core);
             await RegisterWebRtcProtectionAsync(core);
             await RegisterUserScriptsAsync(core);
             core.Profile.PreferredTrackingPreventionLevel = _settings.Current.Privacy.BlockThirdPartyCookies
@@ -622,28 +713,64 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
         }
     }
 
-    public void Sleep(BrowserTabViewModel tab)
+    public void BeginShutdown()
     {
-        if (!_views.TryGetValue(tab, out var weak) || !weak.TryGetTarget(out var view)) return;
-        tab.Detach();
-        if (view.CoreWebView2 is { } core)
+        WebView2[] initializing;
+        lock (_initializationGate)
         {
-            _darkScriptIds.Remove(core);
-            _webRtcScriptIds.Remove(core);
-            _userScriptIds.Remove(core);
-            _scriptBridges.Remove(core);
-            if (_adBlockPickers.TryGetValue(core, out var picker)) { _adBlockPickers.Remove(core); picker.Dispose(); }
-            if (_scriptBrokers.TryGetValue(core, out var broker)) { _scriptBrokers.Remove(core); broker.Dispose(); }
-            if (tab.IsPrivate) _ = core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile);
-            try { core.RemoveHostObjectFromScript("zzzUserscript"); } catch { }
+            _isShuttingDown = true;
+            initializing = _initializingViews.Values.ToArray();
         }
-        view.Dispose();
-        _views.Remove(tab);
-        _tabEnvironments.Remove(tab);
-        tab.IsSleeping = true;
+        _history.StopRecording();
+        foreach (var view in initializing)
+            try { view.Dispose(); } catch { }
+        foreach (var weak in _views.Values.ToArray())
+            if (weak.TryGetTarget(out var view))
+                try { view.CoreWebView2?.Stop(); } catch { }
     }
 
-    public void Close(BrowserTabViewModel tab) => Sleep(tab);
+    public void Sleep(BrowserTabViewModel tab)
+    {
+        if (!_views.TryGetValue(tab, out var weak)) return;
+        try
+        {
+            if (!weak.TryGetTarget(out var view)) return;
+            tab.Detach();
+            try
+            {
+                if (view.CoreWebView2 is { } core)
+                {
+                    _darkScriptIds.Remove(core);
+                    _grayscaleScriptIds.Remove(core);
+                    _webRtcScriptIds.Remove(core);
+                    _userScriptIds.Remove(core);
+                    _scriptBridges.Remove(core);
+                    if (_adBlockPickers.TryGetValue(core, out var picker)) { _adBlockPickers.Remove(core); picker.Dispose(); }
+                    if (_scriptBrokers.TryGetValue(core, out var broker)) { _scriptBrokers.Remove(core); broker.Dispose(); }
+                    if (tab.IsPrivate) _ = core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile);
+                    try { core.RemoveHostObjectFromScript("zzzUserscript"); } catch { }
+                }
+            }
+            catch { }
+            try { view.Dispose(); } catch { }
+            tab.IsSleeping = true;
+        }
+        finally
+        {
+            _views.Remove(tab);
+            _tabEnvironments.Remove(tab);
+        }
+    }
+
+    public void Close(BrowserTabViewModel tab)
+    {
+        tab.MarkClosed();
+        WebView2? initializing;
+        lock (_initializationGate) _initializingViews.TryGetValue(tab, out initializing);
+        if (initializing is not null)
+            try { initializing.Dispose(); } catch { }
+        Sleep(tab);
+    }
     public void Dispose()
     {
         _adBlock.RulesChanged -= AdBlock_RulesChanged;
@@ -708,6 +835,9 @@ internal static class PrivateDataGuard
 
 public sealed class AppServices : IDisposable
 {
+    private readonly object _backgroundInitializationGate = new();
+    private Task? _backgroundInitialization;
+    private readonly List<string> _backgroundInitializationErrors = [];
     public SettingsService Settings { get; } = new();
     public BookmarkService Bookmarks { get; } = new();
     public HistoryService History { get; } = new();
@@ -720,6 +850,10 @@ public sealed class AppServices : IDisposable
     public BrowserLifecycleService Browser { get; }
     public TabService Tabs { get; }
     public IMouseGestureService MouseGestures { get; } = new NullMouseGestureService();
+    public bool BackgroundInitializationDegraded
+    {
+        get { lock (_backgroundInitializationErrors) return _backgroundInitializationErrors.Count > 0; }
+    }
 
     public AppServices()
     {
@@ -732,7 +866,43 @@ public sealed class AppServices : IDisposable
     public async Task InitializeAsync()
     {
         Directory.CreateDirectory(AppPaths.Root);
-        await Task.WhenAll(Settings.LoadAsync(), Bookmarks.LoadAsync(), History.LoadAsync(), UserScripts.LoadAsync(), AdBlock.LoadAsync(), Session.LoadAsync());
+        // Only data required to paint the first window is on the cold-start path.
+        await Settings.LoadAsync();
+        var sessionTask = Settings.Current.Browser.RestoreLastSession ? Session.LoadAsync() : Session.ClearAsync();
+        await Task.WhenAll(Bookmarks.LoadAsync(), sessionTask);
+    }
+
+    public Task EnsureBackgroundInitializedAsync()
+    {
+        lock (_backgroundInitializationGate)
+            return _backgroundInitialization ??= Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.WhenAll(
+                        LoadOptionalAsync("history", History.LoadAsync),
+                        LoadOptionalAsync("userscripts", UserScripts.LoadAsync),
+                        LoadOptionalAsync("adblock", AdBlock.LoadAsync));
+                }
+                finally { Browser.CleanupStalePrivateData(); }
+            });
+    }
+
+    private async Task LoadOptionalAsync(string name, Func<Task> load)
+    {
+        try { await load(); }
+        catch
+        {
+            lock (_backgroundInitializationErrors) _backgroundInitializationErrors.Add(name);
+        }
+    }
+
+    public async Task PrepareForShutdownAsync()
+    {
+        Task? initialization;
+        lock (_backgroundInitializationGate) initialization = _backgroundInitialization;
+        var background = initialization ?? Task.CompletedTask;
+        try { await Task.WhenAll(background, Browser.WaitForPendingInitializationsAsync()); } catch { }
     }
     public void Dispose() { Browser.Dispose(); AdBlock.Dispose(); Translation.Dispose(); }
 }

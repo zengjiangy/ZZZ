@@ -28,6 +28,7 @@ public sealed class AppSettings
     public DownloadSettings Downloads { get; set; } = new();
     public StartPageSettings StartPage { get; set; } = new();
     public StorageSettings Storage { get; set; } = new();
+    public LegalSettings Legal { get; set; } = new();
 }
 
 public sealed class UiSettings
@@ -36,6 +37,7 @@ public sealed class UiSettings
     public bool ShowTabBar { get; set; } = true;
     public bool ShowToolbar { get; set; } = true;
     public bool ShowAddressBar { get; set; } = true;
+    public bool GrayscaleMode { get; set; }
 }
 
 public sealed class PrivacySettings
@@ -89,6 +91,11 @@ public sealed class StorageSettings
 {
     public DataStorageMode Mode { get; set; } = DataStorageMode.LocalAppData;
     public string CustomPath { get; set; } = string.Empty;
+}
+
+public sealed class LegalSettings
+{
+    public string AcceptedTermsVersion { get; set; } = string.Empty;
 }
 
 public sealed class AdvancedSettings

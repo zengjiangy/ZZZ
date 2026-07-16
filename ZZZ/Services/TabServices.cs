@@ -24,8 +24,9 @@ public sealed class TabService(AppServices services) : ITabService
     public int Close(BrowserTabViewModel tab)
     {
         var index = Items.IndexOf(tab);
+        if (index < 0) return -1;
         services.Browser.Close(tab);
-        Items.Remove(tab);
+        Items.RemoveAt(index);
         return index;
     }
     public void CloseOthers(BrowserTabViewModel tab)

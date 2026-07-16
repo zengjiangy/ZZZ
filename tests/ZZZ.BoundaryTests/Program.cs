@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using ZZZ.Models;
 using ZZZ.Services;
+using ZZZ.Configuration;
 
 var failures = new List<string>();
 var passed = 0;
@@ -17,9 +18,21 @@ var sessionSnapshot = SessionService.BuildSnapshot(new (string Url, bool IsPriva
     ("https://public.example/", false),
     ("https://private.example/", true),
     ("https://public.example/", false),
+    (BrowserHome.StartPageUrl, false),
     ("not a URL", false)
 });
-Check(sessionSnapshot.SequenceEqual(new[] { "https://public.example/" }), "session snapshots exclude private tabs, invalid URLs, and duplicates");
+Check(sessionSnapshot.SequenceEqual(new[] { "https://public.example/", "https://public.example/" }), "session snapshots exclude private tabs, invalid URLs, and the start page while preserving tab order and duplicates");
+await CheckSessionJournalAsync();
+
+try
+{
+    using var tabServices = new AppServices();
+    var closedTab = tabServices.Tabs.Create("https://closed.example/");
+    tabServices.Tabs.Close(closedTab);
+    Check(closedTab.IsClosed, "closing a tab permanently cancels its browser lifetime");
+    Check(!tabServices.Tabs.Items.Contains(closedTab), "closed tabs are removed after cancellation is marked");
+}
+catch (Exception ex) { Check(false, $"closed-tab lifetime test threw {ex.GetType().FullName}: {ex.Message}"); }
 
 var source = """
 // ==UserScript==
@@ -221,6 +234,45 @@ async Task CheckAdBlockManagerValidationAsync()
     finally
     {
         manager?.Dispose();
+        rootField.SetValue(null, originalRoot);
+        try { if (Directory.Exists(isolatedRoot)) Directory.Delete(isolatedRoot, true); } catch { }
+    }
+}
+
+async Task CheckSessionJournalAsync()
+{
+    var rootField = typeof(AppPaths).GetField("<Root>k__BackingField", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+    if (rootField is null)
+    {
+        Check(false, "session journal tests can isolate the data directory");
+        return;
+    }
+    var originalRoot = (string)rootField.GetValue(null)!;
+    var isolatedRoot = Path.Combine(Path.GetTempPath(), "ZZZ.SessionTests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        rootField.SetValue(null, isolatedRoot);
+        Directory.CreateDirectory(isolatedRoot);
+        var service = new SessionService();
+        var writes = new[] { "https://one.example/", "https://two.example/", "https://final.example/" }
+            .Select(url => service.SaveAsync(new[] { (url, false) })).ToArray();
+        await Task.WhenAll(writes);
+        var persisted = System.Text.Json.JsonSerializer.Deserialize<List<string>>(File.ReadAllText(AppPaths.Session));
+        Check(persisted?.SequenceEqual(new[] { "https://final.example/" }) == true, "latest queued session snapshot wins concurrent writes");
+
+        File.WriteAllText(AppPaths.Session, "[\"https://old.example/\"]");
+        File.WriteAllText(AppPaths.Session + ".tmp", "[\"https://recovered.example/\"]");
+        File.SetLastWriteTimeUtc(AppPaths.Session, DateTime.UtcNow.AddMinutes(-2));
+        File.SetLastWriteTimeUtc(AppPaths.Session + ".tmp", DateTime.UtcNow);
+        var recovered = new SessionService();
+        await recovered.LoadAsync();
+        Check(recovered.Urls.SequenceEqual(new[] { "https://recovered.example/" }), "complete newer pre-2.0 session temporary file is recovered");
+
+        await recovered.ClearAsync();
+        Check(!File.Exists(AppPaths.Session) && !Directory.EnumerateFiles(isolatedRoot, "session.json*.tmp").Any(), "disabling session recording clears journal and temporary files");
+    }
+    finally
+    {
         rootField.SetValue(null, originalRoot);
         try { if (Directory.Exists(isolatedRoot)) Directory.Delete(isolatedRoot, true); } catch { }
     }

@@ -6,6 +6,7 @@ using ZZZ.Services;
 using System.Text.Json;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Diagnostics;
 
 namespace ZZZ.Views;
 
@@ -36,6 +37,7 @@ public partial class SettingsWindow : Window
         StorageModeBox.ItemsSource = new[] { Choice(DataStorageMode.LocalAppData, "LocalData"), Choice(DataStorageMode.Portable, "PortableMode"), Choice(DataStorageMode.Custom, "CustomData") };
         SearchEngineBox.ItemsSource = _working.SearchEngines;
         CurrentDataPathText.Text = $"{LocalizationService.Text("CurrentDataPath")}: {AppPaths.Root}";
+        LoadAboutInfo();
         RefreshBackgroundColorPreview();
         if (showAdvanced) SettingsTabs.SelectedItem = AdvancedTab;
     }
@@ -71,9 +73,9 @@ public partial class SettingsWindow : Window
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
     private async void ExportSettings_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "JSON|*.json", FileName = "zzz-settings.json" }; if (d.ShowDialog() == true) await _main.Services.Settings.ExportAsync(d.FileName); }
     private async void ImportSettings_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "JSON|*.json" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportSettings")) { await _main.Services.Settings.ImportAsync(d.FileName); _working = Clone(_main.Services.Settings.Current); DataContext = _working; SearchEngineBox.ItemsSource = _working.SearchEngines; LoadTranslationTarget(_working.Browser.TranslationTargetLanguage); } }
-    private async void ExportRules_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "Text|*.txt", FileName = "zzz-blocking-rules.txt" }; if (d.ShowDialog() == true) await _main.Services.AdBlock.ExportAsync(d.FileName); }
-    private async void ImportRules_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "Text|*.txt|All files|*.*" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportRules")) await _main.Services.AdBlock.ImportAsync(d.FileName); }
-    private void ManageAdBlock_Click(object sender, RoutedEventArgs e) => new AdBlockSettingsWindow(_main) { Owner = this }.ShowDialog();
+    private async void ExportRules_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "Text|*.txt", FileName = "zzz-blocking-rules.txt" }; if (d.ShowDialog() == true) { await _main.Services.EnsureBackgroundInitializedAsync(); await _main.Services.AdBlock.ExportAsync(d.FileName); } }
+    private async void ImportRules_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "Text|*.txt|All files|*.*" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportRules")) { await _main.Services.EnsureBackgroundInitializedAsync(); await _main.Services.AdBlock.ImportAsync(d.FileName); } }
+    private async void ManageAdBlock_Click(object sender, RoutedEventArgs e) { await _main.Services.EnsureBackgroundInitializedAsync(); new AdBlockSettingsWindow(_main) { Owner = this }.ShowDialog(); }
     private void BrowseBackground_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif", CheckFileExists = true };
@@ -133,9 +135,34 @@ public partial class SettingsWindow : Window
     {
         if (BackgroundColorPreview is null) return;
         var value = BackgroundColorBox?.Text ?? _working.StartPage.BackgroundColor;
-        try { BackgroundColorPreview.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(value)); }
+        try
+        {
+            var color = (Color)ColorConverter.ConvertFromString(value);
+            BackgroundColorPreview.Background = new SolidColorBrush(_working.Ui.GrayscaleMode ? ToGrayscale(color) : color);
+            foreach (var button in FindVisualChildren<Button>(this).Where(x => x.Tag is string tag && tag.StartsWith("#", StringComparison.Ordinal)))
+            {
+                var preset = (Color)ColorConverter.ConvertFromString((string)button.Tag);
+                button.Background = new SolidColorBrush(_working.Ui.GrayscaleMode ? ToGrayscale(preset) : preset);
+            }
+        }
         catch { BackgroundColorPreview.Background = Brushes.Transparent; }
     }
+    private static Color ToGrayscale(Color color)
+    {
+        var gray = (byte)Math.Round(0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B);
+        return Color.FromArgb(color.A, gray, gray, gray);
+    }
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match) yield return match;
+            foreach (var descendant in FindVisualChildren<T>(child)) yield return descendant;
+        }
+    }
+    private void GrayscaleMode_Click(object sender, RoutedEventArgs e) =>
+        Dispatcher.BeginInvoke(new Action(RefreshBackgroundColorPreview));
     private void TranslationTargetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (CustomTranslationTargetBox is null) return;
@@ -165,6 +192,26 @@ public partial class SettingsWindow : Window
         if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) _working.Storage.CustomPath = dialog.SelectedPath;
         DataContext = null;
         DataContext = _working;
+    }
+    private void LoadAboutInfo()
+    {
+        var about = new AboutInfoService(_main.Services.Settings).GetSnapshot();
+        AboutAppVersion.Text = about.ApplicationVersion;
+        AboutWebViewVersion.Text = about.WebViewRuntimeVersion;
+        AboutFingerprint.Text = about.LocalBrowserFingerprint;
+        AboutOperatingSystem.Text = about.OperatingSystem;
+        AboutArchitecture.Text = $"{LocalizationService.Text("OsArchitecture")}: {about.OsArchitecture} · {LocalizationService.Text("ProcessArchitecture")}: {about.ProcessArchitecture}";
+        AboutFramework.Text = about.Framework;
+        AboutProcessorCount.Text = about.ProcessorCount.ToString();
+        AboutLanguage.Text = $"{about.Language} ({about.ConfiguredLanguage})";
+        AboutStorage.Text = about.StorageLocationSummary;
+        AboutUserAgent.Text = about.UserAgentMode;
+    }
+    private void ProjectUrl_Click(object sender, RoutedEventArgs e) => OpenUrl(AboutInfoService.ProjectUrl);
+    private void UpdatesUrl_Click(object sender, RoutedEventArgs e) => OpenUrl(AboutInfoService.UpdatesUrl);
+    private static void OpenUrl(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
     }
     private bool ConfirmSensitive(string operationKey)
     {

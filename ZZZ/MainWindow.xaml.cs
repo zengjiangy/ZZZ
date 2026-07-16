@@ -20,6 +20,8 @@ public partial class MainWindow : Window
     private bool _isFullscreen;
     private bool _splitVertical;
     private bool _splitOrientationManuallySet;
+    private bool _shutdownStarted;
+    private bool _shutdownComplete;
     private WindowState _stateBeforeFullscreen;
     private WindowStyle _styleBeforeFullscreen;
     private ResizeMode _resizeBeforeFullscreen;
@@ -209,6 +211,7 @@ public partial class MainWindow : Window
         else if (alt && e.Key == Key.Left) { ViewModel.SelectedTab?.BackCommand.Execute(null); e.Handled = true; }
         else if (alt && e.Key == Key.Right) { ViewModel.SelectedTab?.ForwardCommand.Execute(null); e.Handled = true; }
         else if (e.Key == Key.F12) { OpenDeveloperTools(); e.Handled = true; }
+        else if (e.Key == Key.F9) { ViewModel.SelectedTab?.ToggleReaderModeCommand.Execute(null); e.Handled = true; }
         else if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; }
     }
 
@@ -218,12 +221,17 @@ public partial class MainWindow : Window
         var home = BrowserHome.GetHomeUrl(ViewModel.Services.Settings.Current);
         menu.Items.Add(Item(LocalizationService.Text("NewTab"), (_, _) => ViewModel.CreateTab(home), "Ctrl+T"));
         menu.Items.Add(Item(LocalizationService.Text("NewPrivateTab"), (_, _) => ViewModel.CreateTab(home, true), "Ctrl+Shift+N"));
-        menu.Items.Add(Item(LocalizationService.Text("Library"), (_, _) => new LibraryWindow(ViewModel).ShowDialog()));
+        menu.Items.Add(Item(LocalizationService.Text("Library"), async (_, _) =>
+        {
+            await ViewModel.Services.EnsureBackgroundInitializedAsync();
+            new LibraryWindow(ViewModel).ShowDialog();
+        }));
         menu.Items.Add(Item(LocalizationService.Text("Downloads"), (_, _) => new DownloadsWindow(ViewModel.Services.Downloads).Show()));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item(LocalizationService.Text("SaveAsPdf"), async (_, _) => await (ViewModel.SelectedTab?.SaveAsPdfAsync() ?? Task.CompletedTask)));
         menu.Items.Add(Item(LocalizationService.Text("SaveAsMht"), async (_, _) => await (ViewModel.SelectedTab?.SaveAsMhtAsync() ?? Task.CompletedTask)));
         menu.Items.Add(Item(LocalizationService.Text("Print"), (_, _) => ViewModel.SelectedTab?.Print(), "Ctrl+P"));
+        menu.Items.Add(Item(LocalizationService.Text(ViewModel.SelectedTab?.IsReaderMode == true ? "ExitReadingMode" : "ReadingMode"), (_, _) => ViewModel.SelectedTab?.ToggleReaderModeCommand.Execute(null), "F9"));
         menu.Items.Add(Item(LocalizationService.Text("FindInPage"), (_, _) => ShowFind(), "Ctrl+F"));
         menu.Items.Add(BuildSplitMenu());
         menu.Items.Add(Item(LocalizationService.Text("Fullscreen"), (_, _) => ToggleFullscreen(), "F11"));
@@ -235,6 +243,19 @@ public partial class MainWindow : Window
         theme.Items.Add(ThemeItem(AppearanceMode.Light, "Light"));
         theme.Items.Add(ThemeItem(AppearanceMode.Dark, "Dark"));
         menu.Items.Add(theme);
+        var grayscale = new MenuItem
+        {
+            Header = LocalizationService.Text("GrayscaleMode"),
+            IsCheckable = true,
+            IsChecked = ViewModel.Services.Settings.Current.Ui.GrayscaleMode
+        };
+        grayscale.Click += async (_, _) =>
+        {
+            ViewModel.Services.Settings.Current.Ui.GrayscaleMode = !ViewModel.Services.Settings.Current.Ui.GrayscaleMode;
+            await ViewModel.Services.Settings.SaveAsync();
+            await ViewModel.ReapplySettingsAsync();
+        };
+        menu.Items.Add(grayscale);
         menu.Items.Add(Item(LocalizationService.Text("Settings"), (_, _) => new SettingsWindow(ViewModel).ShowDialog()));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item(LocalizationService.Text("Exit"), (_, _) => Close()));
@@ -306,8 +327,27 @@ public partial class MainWindow : Window
 
     private async void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        if (_shutdownComplete) return;
+        e.Cancel = true;
+        if (_shutdownStarted) return;
+        _shutdownStarted = true;
+        IsEnabled = false;
         CloseAddressSuggestions();
-        await ViewModel.Services.Settings.SaveAsync();
+        ViewModel.Services.Browser.BeginShutdown();
+        await IgnoreShutdownError(ViewModel.FlushSessionJournalAsync);
+        await IgnoreShutdownError(ViewModel.Services.Settings.SaveAsync);
+        await IgnoreShutdownError(ViewModel.Services.PrepareForShutdownAsync);
+        // Clear last, after navigation has stopped and background history loading
+        // has settled, so nothing can recreate data after the privacy operation.
+        await IgnoreShutdownError(ViewModel.Services.Privacy.ClearOnExitAsync);
+        _shutdownComplete = true;
+        Close();
+    }
+
+    private static async Task IgnoreShutdownError(Func<Task> operation)
+    {
+        try { await operation(); }
+        catch { }
     }
 
     private MenuItem BuildSplitMenu()

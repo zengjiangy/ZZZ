@@ -68,7 +68,7 @@ public static class LocalizationService
         CultureInfo.DefaultThreadCurrentUICulture = culture;
     }
 
-    public static string Text(string key) => Application.Current.TryFindResource(key)?.ToString() ?? key;
+    public static string Text(string key) => Application.Current?.TryFindResource(key)?.ToString() ?? key;
 
     private static ResourceDictionary Load(string code) => new()
     {

@@ -147,11 +147,26 @@ internal static class JsonFiles
     public static async Task SaveAsync<T>(string path, T value)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temp = path + ".tmp";
-        using (var stream = File.Create(temp))
-            await JsonSerializer.SerializeAsync(stream, value, Options);
-        if (File.Exists(path)) File.Delete(path);
-        File.Move(temp, path);
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            using (var stream = File.Create(temp))
+            {
+                await JsonSerializer.SerializeAsync(stream, value, Options);
+                stream.Flush(true);
+            }
+            if (File.Exists(path))
+            {
+                try { File.Replace(temp, path, null, true); return; }
+                catch (PlatformNotSupportedException) { }
+            }
+            if (File.Exists(path)) File.Delete(path);
+            File.Move(temp, path);
+        }
+        finally
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+        }
     }
 }
 
@@ -171,6 +186,7 @@ public sealed class SettingsService : ISettingsService
     public async Task LoadAsync()
     {
         Current = await JsonFiles.LoadAsync(AppPaths.Settings, () => new AppSettings());
+        Current.Legal ??= new LegalSettings();
         Current.Storage.Mode = AppPaths.StorageMode;
         Current.Storage.CustomPath = AppPaths.CustomStoragePath;
         if (Current.Advanced.ForceDarkWebContent)
@@ -312,6 +328,7 @@ public sealed class BookmarkService : IBookmarkService
 public interface IHistoryService
 {
     IReadOnlyList<HistoryEntry> Items { get; }
+    void StopRecording();
     Task LoadAsync();
     Task AddAsync(string title, string url);
     Task RemoveAsync(HistoryEntry item);
@@ -320,46 +337,141 @@ public interface IHistoryService
 
 public sealed class HistoryService : IHistoryService
 {
+    private readonly SemaphoreSlim _gate = new(1, 1);
     private List<HistoryEntry> _items = [];
+    private volatile bool _recordingEnabled = true;
     public IReadOnlyList<HistoryEntry> Items => _items;
-    public async Task LoadAsync() => _items = await JsonFiles.LoadAsync(AppPaths.History, () => new List<HistoryEntry>());
+    public void StopRecording() => _recordingEnabled = false;
+    public async Task LoadAsync()
+    {
+        await _gate.WaitAsync();
+        try { _items = await JsonFiles.LoadAsync(AppPaths.History, () => new List<HistoryEntry>()); }
+        finally { _gate.Release(); }
+    }
     public async Task AddAsync(string title, string url)
     {
-        if (url.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) return;
-        _items.Insert(0, new HistoryEntry { Title = title, Url = url });
-        if (_items.Count > 3000) _items.RemoveRange(3000, _items.Count - 3000);
-        await JsonFiles.SaveAsync(AppPaths.History, _items);
+        if (!_recordingEnabled || url.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) return;
+        await _gate.WaitAsync();
+        try
+        {
+            if (!_recordingEnabled) return;
+            _items.Insert(0, new HistoryEntry { Title = title, Url = url });
+            if (_items.Count > 3000) _items.RemoveRange(3000, _items.Count - 3000);
+            await JsonFiles.SaveAsync(AppPaths.History, _items);
+        }
+        finally { _gate.Release(); }
     }
     public async Task RemoveAsync(HistoryEntry item)
     {
-        if (_items.Remove(item)) await JsonFiles.SaveAsync(AppPaths.History, _items);
+        await _gate.WaitAsync();
+        try { if (_items.Remove(item)) await JsonFiles.SaveAsync(AppPaths.History, _items); }
+        finally { _gate.Release(); }
     }
-    public async Task ClearAsync() { _items.Clear(); await JsonFiles.SaveAsync(AppPaths.History, _items); }
+    public async Task ClearAsync()
+    {
+        await _gate.WaitAsync();
+        try { _items.Clear(); await JsonFiles.SaveAsync(AppPaths.History, _items); }
+        finally { _gate.Release(); }
+    }
 }
 
 public sealed class SessionService
 {
     private readonly SemaphoreSlim _saveGate = new(1, 1);
+    private long _requestedRevision;
     public IReadOnlyList<string> Urls { get; private set; } = [];
-    public async Task LoadAsync() => Urls = await JsonFiles.LoadAsync(AppPaths.Session, () => new List<string>());
+    public async Task LoadAsync()
+    {
+        var saved = await JsonFiles.LoadAsync(AppPaths.Session, () => new List<string>());
+        Urls = BuildSnapshot(saved.Select(x => (x, false)));
+        // Recover the newest complete temporary snapshot after a forced process
+        // termination. Partial JSON is ignored and the previous complete file
+        // remains valid because commits use File.Replace.
+        foreach (var candidate in TemporaryFiles().Where(x => !File.Exists(AppPaths.Session) || File.GetLastWriteTimeUtc(x) > File.GetLastWriteTimeUtc(AppPaths.Session)).OrderByDescending(File.GetLastWriteTimeUtc))
+        {
+            try
+            {
+                using var stream = File.OpenRead(candidate);
+                var recovered = await JsonSerializer.DeserializeAsync<List<string>>(stream);
+                if (recovered is not null)
+                {
+                    Urls = BuildSnapshot(recovered.Select(x => (x, false)));
+                    await SaveAsync(Urls.Select(x => (x, false)));
+                    break;
+                }
+            }
+            catch { }
+        }
+        DeleteTemporaryFiles();
+    }
     public async Task SaveAsync(IEnumerable<(string Url, bool IsPrivate)> tabs)
     {
         var snapshot = BuildSnapshot(tabs);
+        var revision = Interlocked.Increment(ref _requestedRevision);
         await _saveGate.WaitAsync();
         try
         {
+            // A newer snapshot is already waiting. Skipping this write prevents a
+            // slow older save from becoming the next process' restore state.
+            if (revision != Volatile.Read(ref _requestedRevision)) return;
             await JsonFiles.SaveAsync(AppPaths.Session, snapshot);
             Urls = snapshot;
+            TryDelete(AppPaths.Session + ".tmp");
+        }
+        finally { _saveGate.Release(); }
+    }
+
+    public async Task ClearAsync()
+    {
+        Interlocked.Increment(ref _requestedRevision);
+        await _saveGate.WaitAsync();
+        try
+        {
+            // First replace any existing content with an empty durable snapshot.
+            // Even if antivirus software temporarily prevents deletion, no URLs
+            // remain on disk after the setting is switched off.
+            try { await JsonFiles.SaveAsync(AppPaths.Session, new List<string>()); } catch { }
+            ScrubAndDelete(AppPaths.Session);
+            DeleteTemporaryFiles();
+            Urls = [];
         }
         finally { _saveGate.Release(); }
     }
 
     public static List<string> BuildSnapshot(IEnumerable<(string Url, bool IsPrivate)> tabs) => tabs
-        .Where(x => !x.IsPrivate && Uri.TryCreate(x.Url, UriKind.Absolute, out _))
+        .Where(x => !x.IsPrivate && !BrowserHome.IsStartPage(x.Url) && Uri.TryCreate(x.Url, UriKind.Absolute, out _))
         .Select(x => x.Url)
-        .Distinct(StringComparer.OrdinalIgnoreCase)
         .Take(50)
         .ToList();
+
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch { }
+    }
+
+    private static void DeleteTemporaryFiles()
+    {
+        foreach (var path in TemporaryFiles()) ScrubAndDelete(path);
+    }
+
+    private static IEnumerable<string> TemporaryFiles()
+    {
+        var legacy = AppPaths.Session + ".tmp";
+        if (File.Exists(legacy)) yield return legacy;
+        var directory = Path.GetDirectoryName(AppPaths.Session)!;
+        if (!Directory.Exists(directory)) yield break;
+        string[] files;
+        try { files = Directory.GetFiles(directory, Path.GetFileName(AppPaths.Session) + ".*.tmp"); }
+        catch { yield break; }
+        foreach (var path in files) yield return path;
+    }
+
+    private static void ScrubAndDelete(string path)
+    {
+        try { if (File.Exists(path)) File.WriteAllText(path, "[]", new UTF8Encoding(false)); } catch { }
+        TryDelete(path);
+    }
 }
 
 public interface IUserScriptService
@@ -503,7 +615,13 @@ public sealed class UserScriptService : IUserScriptService
     private static HttpClient CreateClient()
     {
         var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/1.9.6");
+        var platform = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X86 => "Windows NT 10.0",
+            Architecture.Arm64 => "Windows NT 10.0; ARM64",
+            _ => "Windows NT 10.0; Win64; x64"
+        };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/2.0.0");
         return client;
     }
 }
@@ -622,10 +740,12 @@ public static class ThemeService
     private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int valueSize);
 
     public static bool IsDarkTheme { get; private set; }
+    public static bool IsGrayscaleMode { get; private set; }
 
-    public static void Apply(AppearanceMode mode, StartPageSettings? startPage = null)
+    public static void Apply(AppearanceMode mode, StartPageSettings? startPage = null, bool grayscale = false)
     {
         IsDarkTheme = mode == AppearanceMode.Dark || (mode == AppearanceMode.System && IsSystemDark());
+        IsGrayscaleMode = grayscale;
         var dark = IsDarkTheme;
         Set("WindowBrush", dark ? "#FF202124" : "#FFF7F7F8");
         Set("ChromeBrush", dark ? "#FF25262A" : "#FFF0F1F5");
@@ -640,9 +760,15 @@ public static class ThemeService
             : defaultAccent;
         accent.A = 255;
         var softTarget = dark ? System.Windows.Media.Color.FromRgb(41, 42, 45) : System.Windows.Media.Colors.White;
+        accent = GrayscaleIfNeeded(accent);
+        defaultAccent = GrayscaleIfNeeded(defaultAccent);
         Set("AccentBrush", accent);
-        Set("AccentSoftBrush", Blend(accent, softTarget, dark ? 0.68 : 0.82));
-        Set("AccentForegroundBrush", RelativeLuminance(accent) > 0.46 ? System.Windows.Media.Colors.Black : System.Windows.Media.Colors.White);
+        var accentSoft = Blend(accent, GrayscaleIfNeeded(softTarget), dark ? 0.68 : 0.82);
+        Set("AccentSoftBrush", accentSoft);
+        var blackContrast = ContrastRatio(System.Windows.Media.Colors.Black, accent);
+        var whiteContrast = ContrastRatio(System.Windows.Media.Colors.White, accent);
+        Set("AccentForegroundBrush", blackContrast >= whiteContrast ? System.Windows.Media.Colors.Black : System.Windows.Media.Colors.White);
+        Set("AccentTextBrush", AccessibleAccentText(accent, accentSoft, dark));
         Set("AppIconBrush", defaultAccent);
         Set("HoverBrush", dark ? "#18FFFFFF" : "#10000000");
         Set("PressedBrush", dark ? "#28FFFFFF" : "#1D000000");
@@ -669,7 +795,7 @@ public static class ThemeService
     }
 
     private static void Set(string key, string color) => Set(key, ParseColor(color, System.Windows.Media.Colors.Transparent));
-    private static void Set(string key, System.Windows.Media.Color color) => Application.Current.Resources[key] = new System.Windows.Media.SolidColorBrush(color);
+    private static void Set(string key, System.Windows.Media.Color color) => Application.Current.Resources[key] = new System.Windows.Media.SolidColorBrush(GrayscaleIfNeeded(color));
     private static System.Windows.Media.Color ParseColor(string? value, System.Windows.Media.Color fallback)
     {
         try { return (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(value); }
@@ -688,6 +814,29 @@ public static class ThemeService
             return channel <= 0.04045 ? channel / 12.92 : Math.Pow((channel + 0.055) / 1.055, 2.4);
         }
         return 0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
+    }
+    private static System.Windows.Media.Color AccessibleAccentText(System.Windows.Media.Color accent, System.Windows.Media.Color background, bool dark)
+    {
+        if (ContrastRatio(accent, background) >= 4.5) return accent;
+        var target = dark ? System.Windows.Media.Colors.White : System.Windows.Media.Colors.Black;
+        for (var step = 1; step <= 20; step++)
+        {
+            var candidate = Blend(accent, target, step / 20d);
+            if (ContrastRatio(candidate, background) >= 4.5) return candidate;
+        }
+        return target;
+    }
+    private static double ContrastRatio(System.Windows.Media.Color left, System.Windows.Media.Color right)
+    {
+        var a = RelativeLuminance(left);
+        var b = RelativeLuminance(right);
+        return (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
+    }
+    private static System.Windows.Media.Color GrayscaleIfNeeded(System.Windows.Media.Color color)
+    {
+        if (!IsGrayscaleMode) return color;
+        var gray = (byte)Math.Round(0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B);
+        return System.Windows.Media.Color.FromArgb(color.A, gray, gray, gray);
     }
     public static System.Drawing.Color WebBackgroundColor()
     {

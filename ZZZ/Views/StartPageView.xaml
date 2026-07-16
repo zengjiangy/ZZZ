@@ -6,6 +6,18 @@
         <SolidColorBrush x:Key="StartPageForegroundBrush" Color="White"/>
         <SolidColorBrush x:Key="StartPagePanelBrush" Color="#D9202733"/>
         <SolidColorBrush x:Key="StartPageBorderBrush" Color="#44FFFFFF"/>
+        <Style x:Key="StartPageBookmarkButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="Panel" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Panel" Property="BorderBrush" Value="{DynamicResource StartPageForegroundBrush}"/><Setter Property="Opacity" Value="0.92"/></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter Property="Opacity" Value="0.78"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
     </UserControl.Resources>
     <Grid x:Name="Root">
         <Image x:Name="BackgroundImage" Stretch="UniformToFill" IsHitTestVisible="False"/>
@@ -20,13 +32,13 @@
             <ItemsControl x:Name="BookmarksList" Grid.Row="1" Margin="0,18,0,0" HorizontalAlignment="Center">
                 <ItemsControl.ItemTemplate><DataTemplate>
                     <StackPanel Margin="0,0,0,9">
-                        <TextBlock Text="{Binding Name}" Foreground="{DynamicResource StartPageForegroundBrush}" Opacity="0.82" FontWeight="SemiBold" Margin="5,0,5,3"/>
+                        <Border Background="{DynamicResource StartPagePanelBrush}" BorderBrush="{DynamicResource StartPageBorderBrush}" BorderThickness="1" CornerRadius="7" Padding="7,3" HorizontalAlignment="Left" Margin="5,0,5,3"><TextBlock Text="{Binding Name}" Foreground="{DynamicResource StartPageForegroundBrush}" FontWeight="SemiBold"/></Border>
                         <ItemsControl ItemsSource="{Binding Items}">
                             <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate><DataTemplate>
-                                <Button Tag="{Binding Url}" Click="Bookmark_Click" ToolTip="{Binding Url}" Margin="5" Padding="{Binding TilePadding}" Width="{Binding TileWidth}" Height="{Binding TileHeight}"
+                                <Button Style="{StaticResource StartPageBookmarkButton}" Tag="{Binding Url}" Click="Bookmark_Click" ToolTip="{Binding Url}" Margin="5" Padding="{Binding TilePadding}" Width="{Binding TileWidth}" Height="{Binding TileHeight}"
                                         Background="{DynamicResource StartPagePanelBrush}" Foreground="{DynamicResource StartPageForegroundBrush}" BorderBrush="{DynamicResource StartPageBorderBrush}" BorderThickness="1">
-                                    <StackPanel><TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" FontSize="{Binding TitleSize}" HorizontalAlignment="Center"/><TextBlock Text="{Binding DisplayUrl}" Visibility="{Binding ShowUrl, Converter={StaticResource BoolVisibility}}" Opacity="0.65" FontSize="10" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" Margin="0,4,0,0"/></StackPanel>
+                                    <StackPanel><TextBlock Text="{Binding Title}" Foreground="{DynamicResource StartPageForegroundBrush}" TextTrimming="CharacterEllipsis" FontSize="{Binding TitleSize}" HorizontalAlignment="Center"/><TextBlock Text="{Binding DisplayUrl}" Foreground="{DynamicResource StartPageForegroundBrush}" Visibility="{Binding ShowUrl, Converter={StaticResource BoolVisibility}}" Opacity="0.65" FontSize="10" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" Margin="0,4,0,0"/></StackPanel>
                                 </Button>
                             </DataTemplate></ItemsControl.ItemTemplate>
                         </ItemsControl>

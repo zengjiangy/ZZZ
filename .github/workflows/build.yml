@@ -20,6 +20,8 @@ jobs:
         run: dotnet build ZZZ/ZZZ.csproj -c Release -p:PlatformTarget=x64 -p:OutputPath=${{ github.workspace }}/artifacts/win-x64/
       - name: Run privacy and permission boundary tests
         run: dotnet run --project tests/ZZZ.BoundaryTests/ZZZ.BoundaryTests.csproj -c Release
+      - name: Build x86 compatibility version
+        run: dotnet build ZZZ/ZZZ.csproj -c Release -p:PlatformTarget=x86 -p:OutputPath=${{ github.workspace }}/artifacts/win-x86/
       - name: Build ARM64
         run: dotnet build ZZZ/ZZZ.csproj -c Release -p:PlatformTarget=ARM64 -p:OutputPath=${{ github.workspace }}/artifacts/win-arm64/
       - name: Audit vulnerable packages
@@ -29,4 +31,5 @@ jobs:
           name: ZZZ-unsigned-builds
           path: |
             artifacts/win-x64/ZZZ.exe
+            artifacts/win-x86/ZZZ.exe
             artifacts/win-arm64/ZZZ.exe

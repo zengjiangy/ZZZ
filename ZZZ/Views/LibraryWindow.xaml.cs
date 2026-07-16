@@ -26,7 +26,15 @@ public partial class LibraryWindow : Window
     }
     private void OpenBookmark_Click(object sender, RoutedEventArgs e) { if (BookmarksGrid.SelectedItem is Bookmark b) { _main.CreateTab(b.Url); Close(); } }
     private async void RemoveBookmark_Click(object sender, RoutedEventArgs e) { if (BookmarksGrid.SelectedItem is Bookmark b) { await _main.Services.Bookmarks.RemoveAsync(b); RefreshBookmarkGroups(); } }
-    private async void SaveBookmarks_Click(object sender, RoutedEventArgs e) { BookmarksGrid.CommitEdit(DataGridEditingUnit.Cell, true); BookmarksGrid.CommitEdit(DataGridEditingUnit.Row, true); await _main.Services.Bookmarks.SaveAsync(); RefreshBookmarkGroups(); }
+    private async void SaveBookmarks_Click(object sender, RoutedEventArgs e)
+    {
+        BookmarksGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        BookmarksGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        foreach (var bookmark in _main.Services.Bookmarks.Items.Where(x => string.IsNullOrWhiteSpace(x.Title)))
+            bookmark.Title = Uri.TryCreate(bookmark.Url, UriKind.Absolute, out var uri) && !string.IsNullOrWhiteSpace(uri.Host) ? uri.Host : bookmark.Url;
+        await _main.Services.Bookmarks.SaveAsync();
+        RefreshBookmarkGroups();
+    }
     private async void ImportBookmarks_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "Bookmarks HTML|*.html;*.htm" }; if (d.ShowDialog() == true) { await _main.Services.Bookmarks.ImportHtmlAsync(d.FileName); RefreshBookmarkGroups(); } }
     private async void ExportBookmarks_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "HTML|*.html", FileName = "zzz-bookmarks.html" }; if (d.ShowDialog() == true) await _main.Services.Bookmarks.ExportHtmlAsync(d.FileName); }
     private void OpenHistory_Click(object sender, RoutedEventArgs e) { if (HistoryGrid.SelectedItem is HistoryEntry h) { _main.CreateTab(h.Url); Close(); } }

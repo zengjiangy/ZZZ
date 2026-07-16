@@ -40,4 +40,18 @@
     <sys:String x:Key="CustomRules">自訂封鎖規則</sys:String><sys:String x:Key="CustomRulesHint">每行輸入一條 ABP 相容規則；透過「封鎖此廣告」建立的規則也會顯示於此。</sys:String><sys:String x:Key="ActiveRuleSummary">{0:N0} 條網路規則 · {1:N0} 條元素隱藏規則 · {2:N0} 條已忽略</sys:String>
     <sys:String x:Key="BlockThisAd">封鎖此廣告</sys:String><sys:String x:Key="AdElementBlocked">已封鎖此廣告元素並儲存規則。</sys:String><sys:String x:Key="AdElementBlockFailed">無法為此元素建立安全的封鎖規則。</sys:String><sys:String x:Key="AdBlockReloadHint">修改訂閱後請重新整理已開啟的網頁，以套用所有元素隱藏規則。</sys:String><sys:String x:Key="AdBlockSaveFailed">無法儲存廣告封鎖設定。</sys:String>
     <sys:String x:Key="RestoreSessionPrompt">是否還原上次的頁面？</sys:String><sys:String x:Key="Restore">還原</sys:String><sys:String x:Key="NotNow">暫不</sys:String><sys:String x:Key="AdBlockPickerUnavailable">廣告標記功能初始化失敗。</sys:String>
+    <sys:String x:Key="RestoreLastSessionSetting">記錄並提示還原上次工作階段</sys:String><sys:String x:Key="RestoreLastSessionHint">關閉此選項後不記錄一般分頁的工作階段；隱私分頁一律不會記錄。</sys:String>
+    <sys:String x:Key="GrayscaleMode">黑白模式</sys:String><sys:String x:Key="GrayscaleHint">以灰階顯示整個應用程式和所有網頁。</sys:String>
+    <sys:String x:Key="About">關於</sys:String><sys:String x:Key="ApplicationVersion">瀏覽器版本</sys:String><sys:String x:Key="WebViewRuntimeVersion">WebView2 Runtime 版本</sys:String><sys:String x:Key="LocalBrowserFingerprint">本機瀏覽器指紋</sys:String><sys:String x:Key="FingerprintPrivacyHint">此指紋僅供本機識別，不會自動上傳。</sys:String>
+    <sys:String x:Key="OperatingSystem">作業系統</sys:String><sys:String x:Key="Architecture">系統架構</sys:String><sys:String x:Key="Framework">.NET Framework</sys:String><sys:String x:Key="ProcessorCount">處理器數量</sys:String><sys:String x:Key="StorageLocation">儲存位置</sys:String><sys:String x:Key="UserAgentMode">User-Agent 模式</sys:String>
+    <sys:String x:Key="ProjectAddress">專案網址</sys:String><sys:String x:Key="UpdateAddress">更新網址</sys:String>
+    <sys:String x:Key="ReadingMode">閱讀模式</sys:String><sys:String x:Key="ExitReadingMode">離開閱讀模式</sys:String><sys:String x:Key="ReaderModeUnavailable">此網頁不支援閱讀模式。</sys:String>
+    <sys:String x:Key="TermsTitle">使用條款</sys:String><sys:String x:Key="TermsIntro">使用 ZZZ 瀏覽器前，請閱讀以下簡短條款。</sys:String>
+    <sys:String x:Key="TermsUseHeading">合法使用</sys:String><sys:String x:Key="TermsUseBody">請依法使用本軟體，不得用於侵害他人權益。</sys:String>
+    <sys:String x:Key="TermsPrivacyHeading">本機資料與隱私</sys:String><sys:String x:Key="TermsPrivacyBody">設定、書籤、歷史記錄等瀏覽器資料會儲存在您選擇的本機位置。隱私分頁可減少本機痕跡，但不會讓您在網路上匿名。</sys:String>
+    <sys:String x:Key="TermsThirdPartyHeading">第三方服務</sys:String><sys:String x:Key="TermsThirdPartyBody">造訪網站或使用搜尋、翻譯、篩選規則訂閱等功能時會連線至第三方，並受其條款與隱私權政策約束。</sys:String>
+    <sys:String x:Key="TermsDisclaimerHeading">免責聲明</sys:String><sys:String x:Key="TermsDisclaimerBody">本開放原始碼軟體依「現狀」提供，不提供任何擔保。在法律允許的範圍內，作者不對資料遺失、第三方內容或間接損失負責。</sys:String>
+    <sys:String x:Key="TermsAcceptance">按一下「同意並繼續」即表示您已理解並接受這些條款。</sys:String><sys:String x:Key="AgreeAndContinue">同意並繼續</sys:String><sys:String x:Key="ExitApplication">結束應用程式</sys:String>
+    <sys:String x:Key="BackgroundServicesDegraded">部分背景資料無法載入；瀏覽器已以降級模式繼續執行。</sys:String><sys:String x:Key="UnknownValue">未知</sys:String><sys:String x:Key="Unavailable">無法使用</sys:String>
+    <sys:String x:Key="CustomUserAgentHidden">自訂（值已隱藏）</sys:String><sys:String x:Key="OsArchitecture">作業系統架構</sys:String><sys:String x:Key="ProcessArchitecture">處理程序架構</sys:String>
 </ResourceDictionary>

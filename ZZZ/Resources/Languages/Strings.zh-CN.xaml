@@ -36,4 +36,18 @@
     <sys:String x:Key="CustomRules">自定义拦截规则</sys:String><sys:String x:Key="CustomRulesHint">每行输入一条 ABP 兼容规则；通过“标记为广告”生成的规则也会显示在这里。</sys:String><sys:String x:Key="ActiveRuleSummary">{0:N0} 条网络规则 · {1:N0} 条元素隐藏规则 · {2:N0} 条已忽略</sys:String>
     <sys:String x:Key="BlockThisAd">标记为广告</sys:String><sys:String x:Key="AdElementBlocked">已拦截该广告元素并保存规则。</sys:String><sys:String x:Key="AdElementBlockFailed">无法为此元素生成安全的拦截规则。</sys:String><sys:String x:Key="AdBlockReloadHint">修改订阅后请刷新已打开的页面，以应用全部元素隐藏规则。</sys:String><sys:String x:Key="AdBlockSaveFailed">无法保存广告拦截设置。</sys:String>
     <sys:String x:Key="RestoreSessionPrompt">是否还原上次的页面？</sys:String><sys:String x:Key="Restore">还原</sys:String><sys:String x:Key="NotNow">暂不</sys:String><sys:String x:Key="AdBlockPickerUnavailable">广告标记功能初始化失败。</sys:String>
+    <sys:String x:Key="RestoreLastSessionSetting">记录并提示恢复上次会话</sys:String><sys:String x:Key="RestoreLastSessionHint">关闭此选项后不记录普通标签页会话；隐私标签页始终不会记录。</sys:String>
+    <sys:String x:Key="GrayscaleMode">黑白模式</sys:String><sys:String x:Key="GrayscaleHint">以灰阶显示整个应用和所有网页。</sys:String>
+    <sys:String x:Key="About">关于</sys:String><sys:String x:Key="ApplicationVersion">浏览器版本</sys:String><sys:String x:Key="WebViewRuntimeVersion">WebView2 Runtime 版本</sys:String><sys:String x:Key="LocalBrowserFingerprint">本机浏览器指纹</sys:String><sys:String x:Key="FingerprintPrivacyHint">该指纹仅供本机识别，不会自动上传。</sys:String>
+    <sys:String x:Key="OperatingSystem">操作系统</sys:String><sys:String x:Key="Architecture">系统架构</sys:String><sys:String x:Key="Framework">.NET Framework</sys:String><sys:String x:Key="ProcessorCount">处理器数量</sys:String><sys:String x:Key="StorageLocation">存储位置</sys:String><sys:String x:Key="UserAgentMode">User-Agent 模式</sys:String>
+    <sys:String x:Key="ProjectAddress">项目地址</sys:String><sys:String x:Key="UpdateAddress">更新地址</sys:String>
+    <sys:String x:Key="ReadingMode">阅读模式</sys:String><sys:String x:Key="ExitReadingMode">退出阅读模式</sys:String><sys:String x:Key="ReaderModeUnavailable">此页面不支持阅读模式。</sys:String>
+    <sys:String x:Key="TermsTitle">使用条款</sys:String><sys:String x:Key="TermsIntro">使用 ZZZ 浏览器前，请阅读以下简短条款。</sys:String>
+    <sys:String x:Key="TermsUseHeading">合法使用</sys:String><sys:String x:Key="TermsUseBody">请依法使用本软件，不得用于侵犯他人权益。</sys:String>
+    <sys:String x:Key="TermsPrivacyHeading">本地数据与隐私</sys:String><sys:String x:Key="TermsPrivacyBody">设置、书签、历史记录等浏览器数据会存储在您选择的本地位置。隐私标签页可减少本地痕迹，但不会让您在网络上匿名。</sys:String>
+    <sys:String x:Key="TermsThirdPartyHeading">第三方服务</sys:String><sys:String x:Key="TermsThirdPartyBody">访问网站或使用搜索、翻译、过滤规则订阅等功能时会连接第三方，并受其条款与隐私政策约束。</sys:String>
+    <sys:String x:Key="TermsDisclaimerHeading">免责声明</sys:String><sys:String x:Key="TermsDisclaimerBody">本开源软件按“现状”提供，不作任何担保。在法律允许的范围内，作者不对数据丢失、第三方内容或间接损失承担责任。</sys:String>
+    <sys:String x:Key="TermsAcceptance">点击“同意并继续”即表示您已理解并接受这些条款。</sys:String><sys:String x:Key="AgreeAndContinue">同意并继续</sys:String><sys:String x:Key="ExitApplication">退出应用</sys:String>
+    <sys:String x:Key="BackgroundServicesDegraded">部分后台数据未能载入；浏览器已用降级模式继续运行。</sys:String><sys:String x:Key="UnknownValue">未知</sys:String><sys:String x:Key="Unavailable">不可用</sys:String>
+    <sys:String x:Key="CustomUserAgentHidden">自定义（值已隐藏）</sys:String><sys:String x:Key="OsArchitecture">系统架构</sys:String><sys:String x:Key="ProcessArchitecture">进程架构</sys:String>
 </ResourceDictionary>

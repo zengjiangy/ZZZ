@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Runtime.InteropServices;
 using ZZZ.Models;
 
 namespace ZZZ.Services;
@@ -51,7 +52,13 @@ public sealed class AdBlockManager : IDisposable
             // silently downgrade to HTTP.
             AllowAutoRedirect = false
         }) { Timeout = TimeSpan.FromSeconds(45) };
-        _client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) ZZZ/1.9.6");
+        var platform = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X86 => "Windows NT 10.0",
+            Architecture.Arm64 => "Windows NT 10.0; ARM64",
+            _ => "Windows NT 10.0; Win64; x64"
+        };
+        _client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) ZZZ/2.0.0");
         _ownsClient = true;
     }
 

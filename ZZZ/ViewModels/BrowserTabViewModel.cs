@@ -14,6 +14,7 @@ namespace ZZZ.ViewModels;
 public partial class BrowserTabViewModel : ObservableObject
 {
     private readonly AppServices _services;
+    private readonly CancellationTokenSource _lifetimeCancellation = new();
     private WebView2? _view;
     private string _googleTranslationOriginalUrl = string.Empty;
     [ObservableProperty] private string id = Guid.NewGuid().ToString("N");
@@ -28,11 +29,14 @@ public partial class BrowserTabViewModel : ObservableObject
     [ObservableProperty] private string status = string.Empty;
     [ObservableProperty] private DateTime lastActiveUtc = DateTime.UtcNow;
     [ObservableProperty] private int startPageRevision;
+    [ObservableProperty] private bool isReaderMode;
     public ObservableCollection<MediaResource> MediaResources { get; } = [];
     public double ZoomFactor { get; private set; } = 1;
     public bool HasMedia => MediaResources.Count > 0;
     public bool IsStartPage => BrowserHome.IsStartPage(Url);
     public bool IsPrivate { get; }
+    public bool IsClosed { get; private set; }
+    internal CancellationToken LifetimeToken => _lifetimeCancellation.Token;
 
     public BrowserTabViewModel(AppServices services, string url, bool isPrivate = false)
     {
@@ -49,13 +53,29 @@ public partial class BrowserTabViewModel : ObservableObject
         _view = view;
         _view.ZoomFactor = ZoomFactor;
         IsSleeping = false;
+        ToggleReaderModeCommand.NotifyCanExecuteChanged();
     }
 
-    public void Detach() => _view = null;
+    public void Detach()
+    {
+        _view = null;
+        IsReaderMode = false;
+        ToggleReaderModeCommand.NotifyCanExecuteChanged();
+    }
+
+    internal void MarkClosed()
+    {
+        if (IsClosed) return;
+        IsClosed = true;
+        _lifetimeCancellation.Cancel();
+    }
     public void Activate() => LastActiveUtc = DateTime.UtcNow;
 
     public void BeginNavigation(string target)
     {
+        if (IsReaderMode && _view?.CoreWebView2 is { } core)
+            _ = core.ExecuteScriptAsync(ReaderDisableScript);
+        IsReaderMode = false;
         IsLoading = true;
         Address = target;
         Url = target;
@@ -119,8 +139,12 @@ public partial class BrowserTabViewModel : ObservableObject
 
     partial void OnUrlChanged(string value)
     {
+        if (IsReaderMode && _view?.CoreWebView2 is { } core)
+            _ = core.ExecuteScriptAsync(ReaderDisableScript);
+        IsReaderMode = false;
         SiteIdentity = BrowserHome.IsStartPage(value) ? LocalizationService.Text("StartPage") : IdentifySite(value);
         OnPropertyChanged(nameof(IsStartPage));
+        ToggleReaderModeCommand.NotifyCanExecuteChanged();
     }
 
     public void NavigateText(string text)
@@ -192,6 +216,57 @@ public partial class BrowserTabViewModel : ObservableObject
     private static bool IsGoogleTranslationPage(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
         (uri.Host.Equals("translate.google.com", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".translate.goog", StringComparison.OrdinalIgnoreCase));
     [RelayCommand] private void OpenDevTools() { if (_services.Settings.Current.Advanced.EnableDeveloperTools) _view?.CoreWebView2?.OpenDevToolsWindow(); }
+
+    [RelayCommand(CanExecute = nameof(CanToggleReaderMode))]
+    private async Task ToggleReaderModeAsync()
+    {
+        if (_view?.CoreWebView2 is not { } core) return;
+        try
+        {
+            if (IsReaderMode)
+            {
+                await core.ExecuteScriptAsync(ReaderDisableScript);
+                IsReaderMode = false;
+                Status = string.Empty;
+                return;
+            }
+            var result = await core.ExecuteScriptAsync(ReaderEnableScript);
+            var enabled = string.Equals(result, "true", StringComparison.OrdinalIgnoreCase);
+            IsReaderMode = enabled;
+            Status = enabled ? string.Empty : LocalizationService.Text("ReaderModeUnavailable");
+        }
+        catch
+        {
+            IsReaderMode = false;
+            Status = LocalizationService.Text("ReaderModeUnavailable");
+        }
+    }
+
+    private bool CanToggleReaderMode() => Uri.TryCreate(Url, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    private const string ReaderDisableScript = @"(() => {
+document.getElementById('__zzzReaderMode')?.remove();
+document.getElementById('__zzzReaderModeStyle')?.remove();
+document.documentElement.classList.remove('__zzzReaderActive');
+document.body?.classList.remove('__zzzReaderActive');
+return true;
+})();";
+
+    private const string ReaderEnableScript = @"(() => {
+const id='__zzzReaderMode';
+if(document.getElementById(id)) return true;
+const score=node=>{const text=(node.innerText||'').trim();const links=Array.from(node.querySelectorAll('a')).reduce((n,a)=>n+(a.innerText||'').length,0);return text.length-links*1.5;};
+let candidates=Array.from(document.querySelectorAll('article,main,[role=main],.article,.article-body,.post,.post-content,.entry-content'));
+if(!candidates.length)candidates=Array.from(document.body.querySelectorAll('section,div')).filter(x=>(x.innerText||'').length>600).slice(0,250);
+const source=candidates.sort((a,b)=>score(b)-score(a))[0];
+if(!source||score(source)<350)return false;
+const overlay=document.createElement('div');overlay.id=id;
+const heading=document.createElement('h1');heading.textContent=document.title||location.hostname;overlay.appendChild(heading);
+const content=source.cloneNode(true);content.querySelectorAll('script,style,noscript,nav,aside,form,button,input,textarea,select,iframe').forEach(x=>x.remove());overlay.appendChild(content);
+const style=document.createElement('style');style.id='__zzzReaderModeStyle';style.textContent=`html.__zzzReaderActive,body.__zzzReaderActive{background:#f5f1e8!important;color:#25221d!important;overflow:auto!important}body.__zzzReaderActive>:not(#__zzzReaderMode){display:none!important}#__zzzReaderMode{display:block!important;box-sizing:border-box!important;max-width:780px!important;margin:0 auto!important;padding:56px 34px 90px!important;background:#f5f1e8!important;color:#25221d!important;font:20px/1.75 Georgia,'Times New Roman',serif!important}#__zzzReaderMode h1{font:700 38px/1.2 system-ui,sans-serif!important;margin:0 0 36px!important;color:#171512!important}#__zzzReaderMode img,#__zzzReaderMode video{max-width:100%!important;height:auto!important}#__zzzReaderMode a{color:#315c8c!important}#__zzzReaderMode pre{white-space:pre-wrap!important;overflow-wrap:anywhere!important}#__zzzReaderMode p{margin:0 0 1.2em!important}@media(prefers-color-scheme:dark){html.__zzzReaderActive,body.__zzzReaderActive,#__zzzReaderMode{background:#1f2023!important;color:#e7e2d8!important}#__zzzReaderMode h1{color:#fff!important}#__zzzReaderMode a{color:#9fc5ef!important}}`;
+(document.head||document.documentElement).appendChild(style);document.documentElement.classList.add('__zzzReaderActive');document.body.classList.add('__zzzReaderActive');document.body.appendChild(overlay);window.scrollTo(0,0);return true;
+})();";
 
     public void Print() => _view?.CoreWebView2?.ShowPrintUI(CoreWebView2PrintDialogKind.System);
 

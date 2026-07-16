@@ -17,6 +17,10 @@
                 <TextBlock Text="{DynamicResource SearchEnginesHint}" Foreground="{DynamicResource MutedBrush}" Margin="0,9,0,4"/>
                 <DataGrid x:Name="SearchGrid" ItemsSource="{Binding SearchEngines}" AutoGenerateColumns="False" CanUserAddRows="True" MinHeight="150"><DataGrid.Columns><DataGridTextColumn Header="{DynamicResource Name}" Binding="{Binding Name}" Width="140"/><DataGridTextColumn Header="{DynamicResource UrlTemplate}" Binding="{Binding UrlTemplate}" Width="*"/></DataGrid.Columns></DataGrid>
                 <TextBlock Text="{DynamicResource TabSleep}" FontWeight="SemiBold" Margin="0,14,0,4"/><TextBox Text="{Binding Browser.SleepBackgroundTabsAfterMinutes}" Width="100" HorizontalAlignment="Left"/>
+                <Border Background="{DynamicResource AddressBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,14,0,0"><StackPanel>
+                    <CheckBox Content="{DynamicResource RestoreLastSessionSetting}" IsChecked="{Binding Browser.RestoreLastSession}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{DynamicResource RestoreLastSessionHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="26,2,0,0"/>
+                </StackPanel></Border>
             </StackPanel></ScrollViewer></TabItem>
             <TabItem Header="{DynamicResource Appearance}"><ScrollViewer><StackPanel Margin="20" MaxWidth="610">
                 <TextBlock Text="{DynamicResource Theme}" FontWeight="SemiBold"/><ComboBox x:Name="AppearanceBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Appearance}"/>
@@ -25,6 +29,10 @@
                 </StackPanel></Border>
                 <TextBlock Text="{DynamicResource WebDarkMode}" FontWeight="SemiBold"/><ComboBox x:Name="WebDarkModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Advanced.WebDarkMode}"/>
                 <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="9" Padding="12" Margin="0,7,0,0"><TextBlock Text="{DynamicResource WebDarkHint}" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap"/></Border>
+                <Border Background="{DynamicResource AddressBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,12,0,0"><StackPanel>
+                    <CheckBox Content="{DynamicResource GrayscaleMode}" IsChecked="{Binding Ui.GrayscaleMode}" FontWeight="SemiBold" Click="GrayscaleMode_Click"/>
+                    <TextBlock Text="{DynamicResource GrayscaleHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="26,2,0,0"/>
+                </StackPanel></Border>
                 <TextBlock Text="{DynamicResource StartPageBackground}" FontWeight="SemiBold" Margin="0,18,0,4"/>
                 <Grid Margin="0,2,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <Border x:Name="BackgroundColorPreview" Width="34" Height="34" CornerRadius="8" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"/>
@@ -87,6 +95,25 @@
                 <WrapPanel Margin="0,18,0,0"><Button Content="{DynamicResource ExportSettings}" Click="ExportSettings_Click" Margin="0,0,8,0"/><Button Content="{DynamicResource ImportSettings}" Click="ImportSettings_Click"/></WrapPanel>
                 <WrapPanel Margin="0,10,0,0"><Button Content="{DynamicResource ExportRules}" Click="ExportRules_Click" Margin="0,0,8,0"/><Button Content="{DynamicResource ImportRules}" Click="ImportRules_Click"/></WrapPanel>
             </StackPanel></TabItem>
+            <TabItem Header="{DynamicResource About}"><ScrollViewer><StackPanel Margin="20" MaxWidth="610">
+                <TextBlock Text="ZZZ" FontSize="26" FontWeight="SemiBold"/>
+                <Grid Margin="0,16,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                    <TextBlock Text="{DynamicResource ApplicationVersion}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutAppVersion" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="1" Text="{DynamicResource WebViewRuntimeVersion}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutWebViewVersion" Grid.Row="1" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="2" Text="{DynamicResource LocalBrowserFingerprint}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutFingerprint" Grid.Row="2" Grid.Column="1" Margin="0,5" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="3" Text="{DynamicResource OperatingSystem}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutOperatingSystem" Grid.Row="3" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="4" Text="{DynamicResource Architecture}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutArchitecture" Grid.Row="4" Grid.Column="1" Margin="0,5"/>
+                    <TextBlock Grid.Row="5" Text="{DynamicResource Framework}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutFramework" Grid.Row="5" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="6" Text="{DynamicResource ProcessorCount}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutProcessorCount" Grid.Row="6" Grid.Column="1" Margin="0,5"/>
+                    <TextBlock Grid.Row="7" Text="{DynamicResource Language}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutLanguage" Grid.Row="7" Grid.Column="1" Margin="0,5"/>
+                    <TextBlock Grid.Row="8" Text="{DynamicResource StorageLocation}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutStorage" Grid.Row="8" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
+                </Grid>
+                <Border Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,12,0,0"><TextBlock Text="{DynamicResource FingerprintPrivacyHint}" TextWrapping="Wrap"/></Border>
+                <TextBlock Text="{DynamicResource UserAgentMode}" FontWeight="SemiBold" Margin="0,16,0,2"/><TextBlock x:Name="AboutUserAgent" TextWrapping="Wrap"/>
+                <WrapPanel Margin="0,18,0,0"><Button Content="{DynamicResource ProjectAddress}" Click="ProjectUrl_Click" Style="{StaticResource PrimaryButton}"/><Button Content="{DynamicResource UpdateAddress}" Click="UpdatesUrl_Click" Margin="8,0,0,0"/></WrapPanel>
+            </StackPanel></ScrollViewer></TabItem>
         </TabControl>
         <Border Grid.Row="2" Background="{DynamicResource ChromeBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0"><StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="18,0"><Button Content="{DynamicResource Close}" Click="Cancel_Click" Margin="0,0,8,0"/><Button Content="{DynamicResource Save}" Click="Save_Click" Style="{StaticResource PrimaryButton}" MinWidth="90"/></StackPanel></Border>
     </Grid>
