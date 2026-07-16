@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using ZZZ.Models;
 
@@ -9,11 +12,12 @@ public static class AdBlockElementPicker
     public static async Task<AdBlockElementPickerSession> AttachAsync(
         CoreWebView2 core,
         string menuLabel,
-        Func<AdBlockElementRule, Task> saveRuleAsync)
+        Func<AdBlockElementRule, Task> saveRuleAsync,
+        Func<string, string>? cosmeticCssProvider = null)
     {
         if (core is null) throw new ArgumentNullException(nameof(core));
         if (saveRuleAsync is null) throw new ArgumentNullException(nameof(saveRuleAsync));
-        var session = new AdBlockElementPickerSession(core, string.IsNullOrWhiteSpace(menuLabel) ? "Block this element" : menuLabel, saveRuleAsync);
+        var session = new AdBlockElementPickerSession(core, string.IsNullOrWhiteSpace(menuLabel) ? "Block this element" : menuLabel, saveRuleAsync, cosmeticCssProvider);
         await session.AttachAsync().ConfigureAwait(true);
         return session;
     }
@@ -60,7 +64,12 @@ const selectorFor = element => {
   const selector = parts.join(' > ');
   return selector.length <= 2048 ? selector : '';
 };
-document.addEventListener('contextmenu', event => { target = event.target && event.target.nodeType === 1 ? event.target : null; }, true);
+document.addEventListener('contextmenu', event => {
+  target = event.target && event.target.nodeType === 1 ? event.target : null;
+  const selector = selectorFor(target);
+  if (!selector) return;
+  try { window.chrome.webview.postMessage({ kind:'zzz-adblock-picker', token:'__ZZZ_PICKER_TOKEN__', pageUrl:location.href, selector:selector }); } catch {}
+}, true);
 const api = Object.freeze({
   capture: () => {
     const selector = selectorFor(target);
@@ -78,16 +87,32 @@ public sealed class AdBlockElementPickerSession : IDisposable
 {
     private readonly CoreWebView2 _core;
     private readonly Func<AdBlockElementRule, Task> _saveRuleAsync;
+    private readonly Func<string, string>? _cosmeticCssProvider;
     private readonly CoreWebView2ContextMenuItem _menuItem;
+    private readonly string _menuLabel;
+    private readonly string _messageToken = Guid.NewGuid().ToString("N");
+    private readonly string _bootstrap;
+    private readonly Dictionary<uint, FrameRegistration> _frames = [];
     private string _scriptId = string.Empty;
     private string _lastPageUrl = string.Empty;
+    private string _lastFrameUrl = string.Empty;
+    private PickerCapture? _lastCapture;
+    private CoreWebView2Frame? _lastCaptureFrame;
+    private DateTime _lastCaptureUtc;
+    private DateTime _lastNativeMenuUtc;
+    private DateTime _lastContextMenuUtc;
+    private DispatcherTimer? _fallbackTimer;
+    private ContextMenu? _fallbackMenu;
     private bool _attached;
     private bool _disposed;
 
-    internal AdBlockElementPickerSession(CoreWebView2 core, string menuLabel, Func<AdBlockElementRule, Task> saveRuleAsync)
+    internal AdBlockElementPickerSession(CoreWebView2 core, string menuLabel, Func<AdBlockElementRule, Task> saveRuleAsync, Func<string, string>? cosmeticCssProvider)
     {
         _core = core;
         _saveRuleAsync = saveRuleAsync;
+        _cosmeticCssProvider = cosmeticCssProvider;
+        _menuLabel = menuLabel;
+        _bootstrap = AdBlockElementPicker.Bootstrap.Replace("__ZZZ_PICKER_TOKEN__", _messageToken);
         _menuItem = core.Environment.CreateContextMenuItem(menuLabel, null!, CoreWebView2ContextMenuItemKind.Command);
     }
 
@@ -97,9 +122,11 @@ public sealed class AdBlockElementPickerSession : IDisposable
     internal async Task AttachAsync()
     {
         if (_attached) return;
-        _scriptId = await _core.AddScriptToExecuteOnDocumentCreatedAsync(AdBlockElementPicker.Bootstrap).ConfigureAwait(true);
-        try { await _core.ExecuteScriptAsync(AdBlockElementPicker.Bootstrap).ConfigureAwait(true); } catch { }
+        _scriptId = await _core.AddScriptToExecuteOnDocumentCreatedAsync(_bootstrap).ConfigureAwait(true);
+        try { await _core.ExecuteScriptAsync(_bootstrap).ConfigureAwait(true); } catch { }
         _core.ContextMenuRequested += OnContextMenuRequested;
+        _core.WebMessageReceived += OnCoreWebMessageReceived;
+        _core.FrameCreated += OnCoreFrameCreated;
         _menuItem.CustomItemSelected += OnCustomItemSelected;
         _attached = true;
     }
@@ -109,15 +136,40 @@ public sealed class AdBlockElementPickerSession : IDisposable
         if (_disposed) throw new ObjectDisposedException(nameof(AdBlockElementPickerSession));
         try
         {
-            var json = await _core.ExecuteScriptAsync("window.__zzzAdBlockElementPicker ? window.__zzzAdBlockElementPicker.capture() : null").ConfigureAwait(true);
-            if (string.IsNullOrWhiteSpace(json) || json == "null") return null;
-            var capture = JsonSerializer.Deserialize<PickerCapture>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var captureIsCurrent = DateTime.UtcNow - _lastCaptureUtc < TimeSpan.FromMinutes(2) &&
+                (_lastContextMenuUtc == default || _lastCaptureUtc >= _lastContextMenuUtc - TimeSpan.FromMilliseconds(500));
+            var capture = captureIsCurrent ? _lastCapture : null;
+            var captureFrame = capture is null ? null : _lastCaptureFrame;
+            if (capture is null)
+            {
+                var registration = _frames.Values.LastOrDefault(x => string.Equals(x.PageUrl, _lastFrameUrl, StringComparison.OrdinalIgnoreCase));
+                var json = registration is not null && registration.Frame.IsDestroyed() == 0
+                    ? await registration.Frame.ExecuteScriptAsync("window.__zzzAdBlockElementPicker ? window.__zzzAdBlockElementPicker.capture() : null").ConfigureAwait(true)
+                    : await _core.ExecuteScriptAsync("window.__zzzAdBlockElementPicker ? window.__zzzAdBlockElementPicker.capture() : null").ConfigureAwait(true);
+                if (string.IsNullOrWhiteSpace(json) || json == "null") return null;
+                capture = JsonSerializer.Deserialize<PickerCapture>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (registration is not null)
+                {
+                    captureFrame = registration.Frame;
+                    if (capture is not null && string.IsNullOrWhiteSpace(capture.PageUrl)) capture.PageUrl = registration.PageUrl;
+                }
+            }
             if (capture is null || string.IsNullOrWhiteSpace(capture.Selector)) return null;
             var pageUrl = string.IsNullOrWhiteSpace(capture.PageUrl) ? _lastPageUrl : capture.PageUrl;
+            if (!IsHttpPage(pageUrl)) pageUrl = _lastPageUrl;
+            if (!IsHttpPage(pageUrl)) return null;
             var rule = new AdBlockElementRule { PageUrl = pageUrl, Selector = capture.Selector };
             // Give immediate visual feedback while the combined subscription
             // snapshot is rebuilt and the new rule is persisted in the background.
-            try { await _core.ExecuteScriptAsync("window.__zzzAdBlockElementPicker && window.__zzzAdBlockElementPicker.hide()").ConfigureAwait(true); } catch { }
+            try
+            {
+                var frame = captureFrame;
+                if (frame is not null && frame.IsDestroyed() == 0)
+                    await frame.ExecuteScriptAsync("window.__zzzAdBlockElementPicker && window.__zzzAdBlockElementPicker.hide()").ConfigureAwait(true);
+                else
+                    await _core.ExecuteScriptAsync("window.__zzzAdBlockElementPicker && window.__zzzAdBlockElementPicker.hide()").ConfigureAwait(true);
+            }
+            catch { }
             await _saveRuleAsync(rule).ConfigureAwait(true);
             LastError = string.Empty;
             RuleCreated?.Invoke(this, new AdBlockElementRuleCreatedEventArgs(rule));
@@ -132,24 +184,139 @@ public sealed class AdBlockElementPickerSession : IDisposable
 
     private void OnContextMenuRequested(object? sender, CoreWebView2ContextMenuRequestedEventArgs args)
     {
-        if (_disposed || !args.ContextMenuTarget.IsRequestedForMainFrame) return;
+        if (_disposed) return;
+        _lastNativeMenuUtc = DateTime.UtcNow;
+        _lastContextMenuUtc = _lastNativeMenuUtc;
+        StopFallbackTimer();
         _lastPageUrl = args.ContextMenuTarget.PageUri ?? string.Empty;
-        if (!Uri.TryCreate(_lastPageUrl, UriKind.Absolute, out var page) ||
-            (page.Scheme != Uri.UriSchemeHttp && page.Scheme != Uri.UriSchemeHttps)) return;
+        _lastFrameUrl = args.ContextMenuTarget.FrameUri ?? string.Empty;
+        if (!IsHttpPage(_lastPageUrl)) return;
         args.MenuItems.Add(_menuItem);
     }
 
     private async void OnCustomItemSelected(object? sender, object args) => await CaptureAndSaveAsync().ConfigureAwait(true);
 
+    private void OnCoreWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs args) => OnPickerMessage(args, null);
+    private void OnCoreFrameCreated(object? sender, CoreWebView2FrameCreatedEventArgs args) => AttachFrame(args.Frame);
+
+    private void AttachFrame(CoreWebView2Frame frame)
+    {
+        if (_disposed || _frames.ContainsKey(frame.FrameId)) return;
+        var registration = new FrameRegistration(frame);
+        EventHandler<CoreWebView2WebMessageReceivedEventArgs> message = (_, e) => OnPickerMessage(e, frame);
+        EventHandler<CoreWebView2NavigationStartingEventArgs> navigation = (_, e) => registration.PageUrl = e.Uri ?? string.Empty;
+        EventHandler<CoreWebView2DOMContentLoadedEventArgs> loaded = async (_, _) => await ApplyFrameCosmeticRulesAsync(registration).ConfigureAwait(true);
+        EventHandler<CoreWebView2FrameCreatedEventArgs> child = (_, e) => AttachFrame(e.Frame);
+        EventHandler<object> destroyed = (_, _) => DetachFrame(registration);
+        registration.Detach = () =>
+        {
+            try { frame.WebMessageReceived -= message; } catch { }
+            try { frame.NavigationStarting -= navigation; } catch { }
+            try { frame.DOMContentLoaded -= loaded; } catch { }
+            try { frame.FrameCreated -= child; } catch { }
+            try { frame.Destroyed -= destroyed; } catch { }
+        };
+        _frames[frame.FrameId] = registration;
+        frame.WebMessageReceived += message;
+        frame.NavigationStarting += navigation;
+        frame.DOMContentLoaded += loaded;
+        frame.FrameCreated += child;
+        frame.Destroyed += destroyed;
+    }
+
+    private void DetachFrame(FrameRegistration registration)
+    {
+        _frames.Remove(registration.Id);
+        registration.Detach();
+        if (ReferenceEquals(_lastCaptureFrame, registration.Frame)) _lastCaptureFrame = null;
+    }
+
+    private void OnPickerMessage(CoreWebView2WebMessageReceivedEventArgs args, CoreWebView2Frame? frame)
+    {
+        if (_disposed) return;
+        try
+        {
+            var capture = JsonSerializer.Deserialize<PickerCapture>(args.WebMessageAsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (capture?.Kind != "zzz-adblock-picker" || capture.Token != _messageToken || string.IsNullOrWhiteSpace(capture.Selector) || capture.Selector.Length > 2048) return;
+            capture.PageUrl = args.Source ?? capture.PageUrl;
+            _lastCapture = capture;
+            _lastCaptureFrame = frame;
+            _lastCaptureUtc = DateTime.UtcNow;
+            _lastPageUrl = IsHttpPage(_core.Source) ? _core.Source : _lastPageUrl;
+            if (DateTime.UtcNow - _lastNativeMenuUtc > TimeSpan.FromMilliseconds(500)) StartFallbackTimer();
+        }
+        catch { }
+    }
+
+    private void StartFallbackTimer()
+    {
+        StopFallbackTimer();
+        _fallbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _fallbackTimer.Tick += FallbackTimer_Tick;
+        _fallbackTimer.Start();
+    }
+
+    private void FallbackTimer_Tick(object? sender, EventArgs e)
+    {
+        StopFallbackTimer();
+        if (_disposed || _lastCapture is null || !IsHttpPage(_core.Source)) return;
+        _lastPageUrl = _core.Source;
+        _lastContextMenuUtc = _lastCaptureUtc;
+        if (_fallbackMenu is not null) _fallbackMenu.IsOpen = false;
+        var item = new MenuItem { Header = _menuLabel };
+        item.Click += async (_, _) => await CaptureAndSaveAsync().ConfigureAwait(true);
+        _fallbackMenu = new ContextMenu { Placement = PlacementMode.MousePoint };
+        _fallbackMenu.Items.Add(item);
+        _fallbackMenu.Closed += (_, _) => _fallbackMenu = null;
+        _fallbackMenu.IsOpen = true;
+    }
+
+    private void StopFallbackTimer()
+    {
+        if (_fallbackTimer is null) return;
+        _fallbackTimer.Stop();
+        _fallbackTimer.Tick -= FallbackTimer_Tick;
+        _fallbackTimer = null;
+    }
+
+    public async Task ApplyFrameCosmeticRulesAsync()
+    {
+        foreach (var registration in _frames.Values.ToArray())
+            await ApplyFrameCosmeticRulesAsync(registration).ConfigureAwait(true);
+    }
+
+    private async Task ApplyFrameCosmeticRulesAsync(FrameRegistration registration)
+    {
+        var provider = _cosmeticCssProvider;
+        if (_disposed || provider is null || registration.Frame.IsDestroyed() != 0) return;
+        var scopeUrl = IsHttpPage(registration.PageUrl) ? registration.PageUrl : _core.Source;
+        if (!IsHttpPage(scopeUrl)) return;
+        try
+        {
+            var css = provider(scopeUrl);
+            await registration.Frame.ExecuteScriptAsync(AdBlockElementPicker.BuildApplyCssScript(css)).ConfigureAwait(true);
+        }
+        catch { }
+    }
+
+    private static bool IsHttpPage(string? value) => Uri.TryCreate(value, UriKind.Absolute, out var page) &&
+        (page.Scheme == Uri.UriSchemeHttp || page.Scheme == Uri.UriSchemeHttps);
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+        StopFallbackTimer();
+        if (_fallbackMenu is not null) { _fallbackMenu.IsOpen = false; _fallbackMenu = null; }
         if (_attached)
         {
             _core.ContextMenuRequested -= OnContextMenuRequested;
+            _core.WebMessageReceived -= OnCoreWebMessageReceived;
+            _core.FrameCreated -= OnCoreFrameCreated;
             _menuItem.CustomItemSelected -= OnCustomItemSelected;
         }
+        foreach (var registration in _frames.Values.ToArray()) registration.Detach();
+        _frames.Clear();
         if (!string.IsNullOrWhiteSpace(_scriptId))
         {
             try { _core.RemoveScriptToExecuteOnDocumentCreated(_scriptId); } catch { }
@@ -159,8 +326,18 @@ public sealed class AdBlockElementPickerSession : IDisposable
 
     private sealed class PickerCapture
     {
+        public string Kind { get; set; } = string.Empty;
+        public string Token { get; set; } = string.Empty;
         public string PageUrl { get; set; } = string.Empty;
         public string Selector { get; set; } = string.Empty;
+    }
+
+    private sealed class FrameRegistration(CoreWebView2Frame frame)
+    {
+        public uint Id { get; } = frame.FrameId;
+        public CoreWebView2Frame Frame { get; } = frame;
+        public string PageUrl { get; set; } = string.Empty;
+        public Action Detach { get; set; } = () => { };
     }
 }
 

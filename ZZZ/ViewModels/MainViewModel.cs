@@ -12,10 +12,13 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly AppServices _services;
     private readonly DispatcherTimer _sleepTimer;
+    private readonly DispatcherTimer? _sessionRestoreTimer;
+    private IReadOnlyList<string> _pendingSessionUrls = [];
     private bool _savingSession;
     public ObservableCollection<BrowserTabViewModel> Tabs => _services.Tabs.Items;
     [ObservableProperty] private BrowserTabViewModel? selectedTab;
     [ObservableProperty] private bool isCurrentPageBookmarked;
+    public bool ShowSessionRestorePrompt => _pendingSessionUrls.Count > 0 && SelectedTab?.IsPrivate != true;
     public AppServices Services => _services;
 
     public MainViewModel(AppServices services, IEnumerable<string>? launchUrls = null)
@@ -24,9 +27,18 @@ public partial class MainViewModel : ObservableObject
         _services.Bookmarks.Changed += (_, _) => UpdateBookmarkState();
         _services.Browser.NewTabRequested += (url, isPrivate) => CreateTab(url, isPrivate);
         var suppliedUrls = launchUrls?.Where(x => Uri.TryCreate(x, UriKind.Absolute, out _)).ToArray() ?? [];
-        var startupUrls = suppliedUrls.Length > 0 ? suppliedUrls : (_services.Settings.Current.Browser.RestoreLastSession ? _services.Session.Urls : []);
-        foreach (var url in startupUrls) CreateTab(url);
+        _pendingSessionUrls = _services.Settings.Current.Browser.RestoreLastSession
+            ? _services.Session.Urls.Where(x => !BrowserHome.IsStartPage(x)).Distinct(StringComparer.OrdinalIgnoreCase).Take(50).ToArray()
+            : [];
+        foreach (var url in suppliedUrls) CreateTab(url);
         if (Tabs.Count == 0) CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current));
+        if (_pendingSessionUrls.Count > 0)
+        {
+            _sessionRestoreTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+            _sessionRestoreTimer.Tick += (_, _) => DismissPreviousSession();
+            _sessionRestoreTimer.Start();
+            OnPropertyChanged(nameof(ShowSessionRestorePrompt));
+        }
         _sleepTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _sleepTimer.Tick += async (_, _) =>
         {
@@ -46,6 +58,7 @@ public partial class MainViewModel : ObservableObject
         }
         _services.Browser.SetActive(newValue);
         UpdateBookmarkState();
+        OnPropertyChanged(nameof(ShowSessionRestorePrompt));
     }
 
     private void SelectedTab_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -64,6 +77,27 @@ public partial class MainViewModel : ObservableObject
     public void CreateTab(string url, bool isPrivate = false)
     {
         SelectedTab = _services.Tabs.Create(url, isPrivate);
+    }
+
+    [RelayCommand]
+    private void RestorePreviousSession()
+    {
+        var urls = _pendingSessionUrls;
+        if (urls.Count == 0) return;
+        var placeholder = Tabs.Count == 1 && Tabs[0].IsStartPage && !Tabs[0].IsPrivate ? Tabs[0] : null;
+        ClearPendingSession();
+        if (placeholder is not null) _services.Tabs.Close(placeholder);
+        foreach (var url in urls) CreateTab(url);
+    }
+
+    [RelayCommand]
+    private void DismissPreviousSession() => ClearPendingSession();
+
+    private void ClearPendingSession()
+    {
+        _sessionRestoreTimer?.Stop();
+        _pendingSessionUrls = [];
+        OnPropertyChanged(nameof(ShowSessionRestorePrompt));
     }
 
     [RelayCommand]
@@ -105,7 +139,7 @@ public partial class MainViewModel : ObservableObject
     public async Task ReapplySettingsAsync()
     {
         LocalizationService.Apply(_services.Settings.Current.Ui.Language);
-        ThemeService.Apply(_services.Settings.Current.Appearance);
+        ThemeService.Apply(_services.Settings.Current.Appearance, _services.Settings.Current.StartPage);
         await _services.Browser.ApplyCurrentSettingsAsync(reloadPages: true);
         foreach (var tab in Tabs.Where(x => x.IsStartPage)) tab.RefreshStartPage();
         OnPropertyChanged(nameof(Services));
@@ -124,7 +158,7 @@ public partial class MainViewModel : ObservableObject
     {
         if (_savingSession) return;
         _savingSession = true;
-        try { await _services.Session.SaveAsync(Tabs.Where(x => !x.IsPrivate).Select(x => x.Url)); }
+        try { await _services.Session.SaveAsync(Tabs.Select(x => (x.Url, x.IsPrivate))); }
         finally { _savingSession = false; }
     }
 }

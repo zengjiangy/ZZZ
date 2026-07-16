@@ -4,7 +4,7 @@
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF 和 Microsoft WebView2 构建。它使用系统中的 WebView2 Runtime，不额外捆绑 Chromium，并支持把浏览器数据存放在程序目录中，方便随身携带。
 
-当前版本：**1.9.5**
+当前版本：**1.9.6**
 
 ## 下载与运行
 
@@ -12,8 +12,8 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 
 | 文件 | 适用平台 |
 |---|---|
-| `ZZZ-v1.9.5-win-x64.exe` | Windows x64 原生版本 |
-| `ZZZ-v1.9.5-win-arm64.exe` | Windows ARM64 原生版本 |
+| `ZZZ-v1.9.6-win-x64.exe` | Windows x64 原生版本 |
+| `ZZZ-v1.9.6-win-arm64.exe` | Windows ARM64 原生版本 |
 
 下载后直接运行即可，无需安装。系统需要：
 
@@ -114,7 +114,7 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 dotnet build ZZZ.sln -c Release
 ```
 
-x64 版本输出位于 `ZZZ\bin\Release\net48\ZZZ.exe`。托管依赖和 x86、x64、ARM64 WebView2 原生加载器会嵌入到单个 EXE 中。
+x64 版本输出位于 `ZZZ\bin\Release\net48\ZZZ.exe`。托管依赖以及 x64、ARM64 WebView2 原生加载器会嵌入到对应的单文件 EXE 中；项目不再包含 32 位加载器。
 
 ARM64 构建命令：
 

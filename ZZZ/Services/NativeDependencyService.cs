@@ -14,7 +14,7 @@ internal static class NativeDependencyService
         {
             Architecture.Arm64 => "arm64",
             Architecture.X64 => "x64",
-            _ => "x86"
+            var unsupported => throw new PlatformNotSupportedException($"ZZZ requires a 64-bit x64 or ARM64 process; {unsupported} is not supported.")
         };
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "current";
         var directory = Path.Combine(AppPaths.Root, "Native", version, architecture);

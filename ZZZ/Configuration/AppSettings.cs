@@ -77,6 +77,7 @@ public sealed class BrowserSettings
 public sealed class StartPageSettings
 {
     public string BackgroundColor { get; set; } = "#101826";
+    public bool SyncApplicationAccent { get; set; }
     public string BackgroundImage { get; set; } = string.Empty;
     public double BackgroundOpacity { get; set; } = 1.0;
     public bool ShowBookmarks { get; set; } = true;

@@ -85,7 +85,11 @@ public partial class SettingsWindow : Window
     {
         _pendingBackgroundSource = string.Empty;
         _working.StartPage.BackgroundImage = string.Empty;
+        _working.StartPage.BackgroundColor = "#101826";
+        _working.StartPage.SyncApplicationAccent = false;
         BackgroundImageBox.Text = string.Empty;
+        BackgroundColorBox.Text = _working.StartPage.BackgroundColor;
+        RefreshBackgroundColorPreview();
     }
     private void ChooseBackgroundColor_Click(object sender, RoutedEventArgs e)
     {
@@ -103,17 +107,33 @@ public partial class SettingsWindow : Window
     {
         if (sender is Button { Tag: string color }) SetBackgroundColor(color);
     }
-    private void BackgroundColorBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshBackgroundColorPreview();
+    private void BackgroundColorBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var value = BackgroundColorBox?.Text ?? _working.StartPage.BackgroundColor;
+        if (BackgroundColorBox?.IsKeyboardFocused == true)
+        {
+            try
+            {
+                _ = (Color)ColorConverter.ConvertFromString(value);
+                _working.StartPage.BackgroundColor = value;
+                _working.StartPage.SyncApplicationAccent = true;
+            }
+            catch { }
+        }
+        RefreshBackgroundColorPreview();
+    }
     private void SetBackgroundColor(string color)
     {
         _working.StartPage.BackgroundColor = color;
+        _working.StartPage.SyncApplicationAccent = true;
         if (BackgroundColorBox is not null) BackgroundColorBox.Text = color;
         RefreshBackgroundColorPreview();
     }
     private void RefreshBackgroundColorPreview()
     {
         if (BackgroundColorPreview is null) return;
-        try { BackgroundColorPreview.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(_working.StartPage.BackgroundColor)); }
+        var value = BackgroundColorBox?.Text ?? _working.StartPage.BackgroundColor;
+        try { BackgroundColorPreview.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(value)); }
         catch { BackgroundColorPreview.Background = Brushes.Transparent; }
     }
     private void TranslationTargetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

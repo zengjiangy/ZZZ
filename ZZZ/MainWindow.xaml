@@ -23,7 +23,7 @@
         <Border x:Name="TabBar" Grid.Row="0" Height="44" Background="{DynamicResource ChromeBrush}" Visibility="{Binding Services.Settings.Current.Ui.ShowTabBar, Converter={StaticResource BoolVisibility}}">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
-                <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource AccentBrush}" ToolTip="{DynamicResource AppName}">
+                <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource AppIconBrush}" ToolTip="{DynamicResource AppName}">
                     <Viewbox Margin="6"><Path Stroke="White" StrokeThickness="2.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M2,4 L16,4 L4,16 L18,16 M9,10 L18,10 L11,17"/></Viewbox>
                 </Border>
                 <ListBox x:Name="TabsList" Grid.Column="1" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ItemContainerStyle="{StaticResource TabItemContainer}" SelectionChanged="TabsList_SelectionChanged"
@@ -102,6 +102,13 @@
             <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <!-- WebView2 is an HWND surface, so tool strips live in their own layout row instead of overlaying the page. -->
                 <WrapPanel x:Name="PageTools" Background="{DynamicResource ChromeBrush}" HorizontalAlignment="Right">
+                    <Border Margin="8,5" Padding="10,5" CornerRadius="9" Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" Visibility="{Binding ShowSessionRestorePrompt, Converter={StaticResource BoolVisibility}}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{DynamicResource RestoreSessionPrompt}" VerticalAlignment="Center" Margin="2,0,10,0"/>
+                            <Button Content="{DynamicResource Restore}" Command="{Binding RestorePreviousSessionCommand}" Style="{StaticResource PrimaryButton}" Padding="12,5"/>
+                            <Button Content="{DynamicResource NotNow}" Command="{Binding DismissPreviousSessionCommand}" Padding="10,5" Margin="4,0,0,0"/>
+                        </StackPanel>
+                    </Border>
                     <Border x:Name="SplitBar" Margin="8,5" Padding="7,3" CornerRadius="9" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="{DynamicResource SplitScreen}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="5,0,9,0"/>

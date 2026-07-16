@@ -26,7 +26,7 @@ public partial class App : Application
         Services = new AppServices();
         await Services.InitializeAsync();
         LocalizationService.Apply(Services.Settings.Current.Ui.Language);
-        ThemeService.Apply(Services.Settings.Current.Appearance);
+        ThemeService.Apply(Services.Settings.Current.Appearance, Services.Settings.Current.StartPage);
         var launchUrls = e.Args.Select(SingleInstanceService.NormalizeTarget).Where(x => x is not null).Cast<string>().ToArray();
         var viewModel = new MainViewModel(Services, launchUrls);
         var window = new MainWindow { DataContext = viewModel };
@@ -49,7 +49,7 @@ public partial class App : Application
     {
         if (Services is not null)
         {
-            await Services.Session.SaveAsync(Services.Tabs.Items.Where(x => !x.IsPrivate).Select(x => x.Url));
+            await Services.Session.SaveAsync(Services.Tabs.Items.Select(x => (x.Url, x.IsPrivate)));
             await Services.Privacy.ClearOnExitAsync();
             await Services.Settings.SaveAsync();
             Services.Dispose();

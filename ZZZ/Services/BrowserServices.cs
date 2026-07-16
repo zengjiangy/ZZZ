@@ -162,6 +162,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
             {
                 if (!weak.TryGetTarget(out var view) || view.CoreWebView2 is not { } core) continue;
                 await ApplyCosmeticRulesAsync(core, core.Source, _settings.Current.Advanced.EnableAdBlock);
+                if (_adBlockPickers.TryGetValue(core, out var picker)) await picker.ApplyFrameCosmeticRulesAsync();
             }
         }));
     }
@@ -257,23 +258,27 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         await RegisterUserScriptsAsync(core);
         try
         {
-            var picker = await AdBlockElementPicker.AttachAsync(core, LocalizationService.Text("BlockThisAd"), async rule =>
-            {
-                try
+            var picker = await AdBlockElementPicker.AttachAsync(
+                core,
+                LocalizationService.Text("BlockThisAd"),
+                async rule =>
                 {
-                    await _adBlock.AddElementRuleAsync(rule);
-                    await ApplyCosmeticRulesAsync(core, tab.Url, _settings.Current.Advanced.EnableAdBlock);
-                    tab.Status = LocalizationService.Text("AdElementBlocked");
-                }
-                catch
-                {
-                    tab.Status = LocalizationService.Text("AdElementBlockFailed");
-                    throw;
-                }
-            });
+                    try
+                    {
+                        await _adBlock.AddElementRuleAsync(rule);
+                        await ApplyCosmeticRulesAsync(core, tab.Url, _settings.Current.Advanced.EnableAdBlock);
+                        tab.Status = LocalizationService.Text("AdElementBlocked");
+                    }
+                    catch
+                    {
+                        tab.Status = LocalizationService.Text("AdElementBlockFailed");
+                        throw;
+                    }
+                },
+                url => _settings.Current.Advanced.EnableAdBlock ? _adBlock.GetCosmeticCss(url) : string.Empty);
             _adBlockPickers[core] = picker;
         }
-        catch { }
+        catch { tab.Status = LocalizationService.Text("AdBlockPickerUnavailable"); }
     }
 
     private void OnWebResourceRequested(BrowserTabViewModel tab, CoreWebView2WebResourceRequestedEventArgs e)
@@ -604,6 +609,7 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
                 : CoreWebView2TrackingPreventionLevel.Balanced;
             if (reloadPages) core.Reload();
             else await ApplyCosmeticRulesAsync(core, core.Source, _settings.Current.Advanced.EnableAdBlock);
+            if (!reloadPages && _adBlockPickers.TryGetValue(core, out var picker)) await picker.ApplyFrameCosmeticRulesAsync();
         }
     }
 

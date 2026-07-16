@@ -12,6 +12,15 @@ Check(SiteClassifier.IsThirdParty("https://alice.appspot.com/", "https://bob.app
 Check(SiteClassifier.IsThirdParty("https://alice.co.za/", "https://bob.co.za/"), "multi-label ICANN suffix");
 Check(SiteClassifier.IsThirdParty("http://example.com/", "https://example.com/"), "schemeful site boundary");
 
+var sessionSnapshot = SessionService.BuildSnapshot(new (string Url, bool IsPrivate)[]
+{
+    ("https://public.example/", false),
+    ("https://private.example/", true),
+    ("https://public.example/", false),
+    ("not a URL", false)
+});
+Check(sessionSnapshot.SequenceEqual(new[] { "https://public.example/" }), "session snapshots exclude private tabs, invalid URLs, and duplicates");
+
 var source = """
 // ==UserScript==
 // @name Boundary test
@@ -142,6 +151,8 @@ Check(AdBlockWebView2Mapper.FromWebView2(Microsoft.Web.WebView2.Core.CoreWebView
 Check(AdBlockWebView2Mapper.FromWebView2(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Document, true) == AdBlockResourceType.Subdocument, "WebView2 subdocument resource mapping");
 var encodedCssScript = AdBlockElementPicker.BuildApplyCssScript("</style><script>window.bad=true</script>");
 Check(!encodedCssScript.Contains("</style>") && !encodedCssScript.Contains("<script>"), "cosmetic CSS is JSON-encoded before script injection");
+var pickerBootstrap = (string?)typeof(AdBlockElementPicker).GetField("Bootstrap", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)?.GetRawConstantValue() ?? string.Empty;
+Check(pickerBootstrap.Contains("chrome.webview.postMessage") && pickerBootstrap.Contains("zzz-adblock-picker"), "element picker reports targets from top-level documents and child frames");
 await CheckAdBlockManagerValidationAsync();
 await CheckAdBlockManagerUpdatesAsync();
 

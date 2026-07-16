@@ -5,7 +5,7 @@
     <TargetFramework>net48</TargetFramework>
     <AssemblyName>ZZZ</AssemblyName>
     <RootNamespace>ZZZ</RootNamespace>
-    <Version>1.9.5</Version>
+    <Version>1.9.6</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\zzz.ico</ApplicationIcon>
@@ -16,7 +16,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <PlatformTarget>x64</PlatformTarget>
-    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,9 +33,8 @@
     <Resource Include="Assets\zzz.ico" />
     <None Include="Assets\zzz.svg" />
     <EmbeddedResource Include="Resources\public_suffix_list.dat" LogicalName="ZZZ.Resources.public_suffix_list.dat" />
-    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\build\native\x86\WebView2Loader.dll" LogicalName="ZZZ.Native.x86.WebView2Loader.dll" />
-    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\build\native\x64\WebView2Loader.dll" LogicalName="ZZZ.Native.x64.WebView2Loader.dll" />
-    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\build\native\arm64\WebView2Loader.dll" LogicalName="ZZZ.Native.arm64.WebView2Loader.dll" />
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\build\native\x64\WebView2Loader.dll" LogicalName="ZZZ.Native.x64.WebView2Loader.dll" Condition="'$(PlatformTarget)' == 'x64'" />
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\build\native\arm64\WebView2Loader.dll" LogicalName="ZZZ.Native.arm64.WebView2Loader.dll" Condition="'$(PlatformTarget)' == 'ARM64'" />
   </ItemGroup>
 
 </Project>

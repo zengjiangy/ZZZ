@@ -342,13 +342,24 @@ public sealed class SessionService
     private readonly SemaphoreSlim _saveGate = new(1, 1);
     public IReadOnlyList<string> Urls { get; private set; } = [];
     public async Task LoadAsync() => Urls = await JsonFiles.LoadAsync(AppPaths.Session, () => new List<string>());
-    public async Task SaveAsync(IEnumerable<string> urls)
+    public async Task SaveAsync(IEnumerable<(string Url, bool IsPrivate)> tabs)
     {
-        var snapshot = urls.Where(x => Uri.TryCreate(x, UriKind.Absolute, out _)).Distinct().Take(50).ToList();
+        var snapshot = BuildSnapshot(tabs);
         await _saveGate.WaitAsync();
-        try { await JsonFiles.SaveAsync(AppPaths.Session, snapshot); }
+        try
+        {
+            await JsonFiles.SaveAsync(AppPaths.Session, snapshot);
+            Urls = snapshot;
+        }
         finally { _saveGate.Release(); }
     }
+
+    public static List<string> BuildSnapshot(IEnumerable<(string Url, bool IsPrivate)> tabs) => tabs
+        .Where(x => !x.IsPrivate && Uri.TryCreate(x.Url, UriKind.Absolute, out _))
+        .Select(x => x.Url)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Take(50)
+        .ToList();
 }
 
 public interface IUserScriptService
@@ -492,7 +503,7 @@ public sealed class UserScriptService : IUserScriptService
     private static HttpClient CreateClient()
     {
         var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/1.9.5");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/1.9.6");
         return client;
     }
 }
@@ -612,7 +623,7 @@ public static class ThemeService
 
     public static bool IsDarkTheme { get; private set; }
 
-    public static void Apply(AppearanceMode mode)
+    public static void Apply(AppearanceMode mode, StartPageSettings? startPage = null)
     {
         IsDarkTheme = mode == AppearanceMode.Dark || (mode == AppearanceMode.System && IsSystemDark());
         var dark = IsDarkTheme;
@@ -623,8 +634,16 @@ public static class ThemeService
         Set("TextBrush", dark ? "#FFF1F3F4" : "#FF202124");
         Set("MutedBrush", dark ? "#FFB5B8BD" : "#FF62666D");
         Set("LineBrush", dark ? "#FF3B3D42" : "#FFE3E3E7");
-        Set("AccentBrush", dark ? "#FF9D8CFF" : "#FF6557C8");
-        Set("AccentSoftBrush", dark ? "#FF3D3760" : "#FFE9E6FF");
+        var defaultAccent = ParseColor(dark ? "#FF9D8CFF" : "#FF6557C8", System.Windows.Media.Color.FromRgb(101, 87, 200));
+        var accent = startPage?.SyncApplicationAccent == true
+            ? ParseColor(startPage.BackgroundColor, defaultAccent)
+            : defaultAccent;
+        accent.A = 255;
+        var softTarget = dark ? System.Windows.Media.Color.FromRgb(41, 42, 45) : System.Windows.Media.Colors.White;
+        Set("AccentBrush", accent);
+        Set("AccentSoftBrush", Blend(accent, softTarget, dark ? 0.68 : 0.82));
+        Set("AccentForegroundBrush", RelativeLuminance(accent) > 0.46 ? System.Windows.Media.Colors.Black : System.Windows.Media.Colors.White);
+        Set("AppIconBrush", defaultAccent);
         Set("HoverBrush", dark ? "#18FFFFFF" : "#10000000");
         Set("PressedBrush", dark ? "#28FFFFFF" : "#1D000000");
         Set("WebBackdropBrush", dark ? "#FF111318" : "#FFFFFFFF");
@@ -649,7 +668,27 @@ public static class ThemeService
         catch { }
     }
 
-    private static void Set(string key, string color) => Application.Current.Resources[key] = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color));
+    private static void Set(string key, string color) => Set(key, ParseColor(color, System.Windows.Media.Colors.Transparent));
+    private static void Set(string key, System.Windows.Media.Color color) => Application.Current.Resources[key] = new System.Windows.Media.SolidColorBrush(color);
+    private static System.Windows.Media.Color ParseColor(string? value, System.Windows.Media.Color fallback)
+    {
+        try { return (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(value); }
+        catch { return fallback; }
+    }
+    private static System.Windows.Media.Color Blend(System.Windows.Media.Color color, System.Windows.Media.Color target, double targetWeight)
+    {
+        static byte Channel(byte source, byte destination, double weight) => (byte)Math.Round(source * (1 - weight) + destination * weight);
+        return System.Windows.Media.Color.FromRgb(Channel(color.R, target.R, targetWeight), Channel(color.G, target.G, targetWeight), Channel(color.B, target.B, targetWeight));
+    }
+    private static double RelativeLuminance(System.Windows.Media.Color color)
+    {
+        static double Linear(byte value)
+        {
+            var channel = value / 255d;
+            return channel <= 0.04045 ? channel / 12.92 : Math.Pow((channel + 0.055) / 1.055, 2.4);
+        }
+        return 0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
+    }
     public static System.Drawing.Color WebBackgroundColor()
     {
         var color = ((System.Windows.Media.SolidColorBrush)Application.Current.Resources["WebBackdropBrush"]).Color;

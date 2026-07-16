@@ -4,7 +4,7 @@
         <Grid.RowDefinitions><RowDefinition Height="70"/><RowDefinition Height="*"/><RowDefinition Height="64"/></Grid.RowDefinitions>
         <Border Background="{DynamicResource ChromeBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" Margin="22,0" VerticalAlignment="Center">
-                <Border Width="36" Height="36" Background="{DynamicResource AccentBrush}" CornerRadius="11" Margin="0,0,12,0"><Viewbox Margin="8"><Path Stroke="White" StrokeThickness="2.6" Data="M2,4 L16,4 L4,16 L18,16 M9,10 L18,10 L11,17"/></Viewbox></Border>
+                <Border Width="36" Height="36" Background="{DynamicResource AppIconBrush}" CornerRadius="11" Margin="0,0,12,0"><Viewbox Margin="8"><Path Stroke="White" StrokeThickness="2.6" Data="M2,4 L16,4 L4,16 L18,16 M9,10 L18,10 L11,17"/></Viewbox></Border>
                 <StackPanel><TextBlock Text="{DynamicResource SettingsTitle}" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="{DynamicResource AppName}" Foreground="{DynamicResource MutedBrush}"/></StackPanel>
             </StackPanel>
         </Border>

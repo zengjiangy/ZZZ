@@ -51,7 +51,7 @@ public sealed class AdBlockManager : IDisposable
             // silently downgrade to HTTP.
             AllowAutoRedirect = false
         }) { Timeout = TimeSpan.FromSeconds(45) };
-        _client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) ZZZ/1.9.5");
+        _client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) ZZZ/1.9.6");
         _ownsClient = true;
     }
 
