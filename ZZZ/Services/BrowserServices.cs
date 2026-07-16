@@ -9,6 +9,9 @@ using ZZZ.Views;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Text;
 
 namespace ZZZ.Services;
 
@@ -127,8 +130,10 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private readonly ITranslationService _translation;
     private readonly Dictionary<BrowserTabViewModel, WeakReference<WebView2>> _views = [];
     private readonly Dictionary<CoreWebView2, string> _darkScriptIds = [];
+    private readonly Dictionary<CoreWebView2, string> _webRtcScriptIds = [];
     private readonly Dictionary<CoreWebView2, string> _userScriptIds = [];
     private readonly Dictionary<CoreWebView2, UserScriptBridge> _scriptBridges = [];
+    private readonly Dictionary<CoreWebView2, UserScriptNetworkBroker> _scriptBrokers = [];
     private readonly Dictionary<BrowserTabViewModel, CoreWebView2Environment> _tabEnvironments = [];
     private readonly object _environmentGate = new();
     private readonly string _privateDataPath = Path.Combine(AppPaths.PrivateWebViewRoot, Guid.NewGuid().ToString("N"));
@@ -213,18 +218,25 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         core.PermissionRequested += (_, e) => OnPermissionRequested(tab, e);
         core.WebMessageReceived += async (_, e) => await OnWebMessageReceivedAsync(core, tab, e);
         core.DownloadStarting += (_, e) => _downloads.Handle(e);
-        core.WebResourceResponseReceived += (_, e) => OnWebResourceResponseReceived(tab, e);
+        core.WebResourceResponseReceived += async (_, e) => await OnWebResourceResponseReceivedAsync(core, tab, e);
+        core.Profile.PreferredTrackingPreventionLevel = cfg.Privacy.BlockThirdPartyCookies
+            ? CoreWebView2TrackingPreventionLevel.Strict
+            : CoreWebView2TrackingPreventionLevel.Balanced;
         if (!tab.IsPrivate) _privacy.AttachProfile(core.Profile);
         var bridge = new UserScriptBridge(!tab.IsPrivate);
         _scriptBridges[core] = bridge;
+        var networkBroker = new UserScriptNetworkBroker(core, _settings);
+        bridge.AttachNetwork(networkBroker);
+        _scriptBrokers[core] = networkBroker;
         try { core.AddHostObjectToScript("zzzUserscript", bridge); } catch { }
         core.FrameCreated += (_, e) =>
         {
             try { e.Frame.AddHostObjectToScript("zzzUserscript", bridge, new[] { "*" }); } catch { }
         };
         await RegisterDarkModeAsync(core);
-        await RegisterUserScriptsAsync(core);
+        await RegisterWebRtcProtectionAsync(core);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(LocationBootstrap);
+        await RegisterUserScriptsAsync(core);
     }
 
     private void OnWebResourceRequested(BrowserTabViewModel tab, CoreWebView2WebResourceRequestedEventArgs e)
@@ -245,19 +257,28 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
             e.Request.Headers.SetHeader("Cache-Control", "no-store, max-age=0");
             e.Request.Headers.SetHeader("Pragma", "no-cache");
         }
-        // Do not delete or blanket-strip cross-site cookies: that breaks OAuth,
-        // federated sign-in and payment flows. In balanced mode only known
-        // tracking requests lose their Cookie header; normal embedded services
-        // retain WebView2's standard SameSite protections.
-        if (cfg.Privacy.BlockThirdPartyCookies && IsThirdParty(tab.Url, url) && _adBlock.ShouldBlock(url))
+        // Strict mode intentionally strips every cross-site Cookie header. This can
+        // require users to temporarily disable the option for federated sign-in or
+        // payment widgets, but it makes the setting match its privacy promise.
+        if (cfg.Privacy.BlockThirdPartyCookies && IsThirdParty(tab.Url, url))
         {
             try { e.Request.Headers.RemoveHeader("Cookie"); } catch { }
         }
         if (cfg.Advanced.EnableResourceSniffer && TryMedia(url, null, null, out var kind)) tab.AddMedia(url, kind);
     }
 
-    private void OnWebResourceResponseReceived(BrowserTabViewModel tab, CoreWebView2WebResourceResponseReceivedEventArgs e)
+    private async Task OnWebResourceResponseReceivedAsync(CoreWebView2 core, BrowserTabViewModel tab, CoreWebView2WebResourceResponseReceivedEventArgs e)
     {
+        var url = e.Request.Uri;
+        if (_settings.Current.Privacy.BlockThirdPartyCookies && IsThirdParty(tab.Url, url))
+        {
+            try
+            {
+                var cookies = await core.CookieManager.GetCookiesAsync(url);
+                foreach (var cookie in cookies) core.CookieManager.DeleteCookie(cookie);
+            }
+            catch { }
+        }
         if (!_settings.Current.Advanced.EnableResourceSniffer) return;
         try
         {
@@ -285,8 +306,6 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         tab.Status = string.Empty;
         if (!tab.IsPrivate) await _history.AddAsync(tab.Title, tab.Url);
         var cfg = _settings.Current;
-        if (cfg.Privacy.DisableWebRtc)
-            await SafeScript(core, "Object.defineProperty(window,'RTCPeerConnection',{value:undefined});Object.defineProperty(window,'webkitRTCPeerConnection',{value:undefined});");
         var darkScript = WebDarkModeService.ScriptFor(ThemeService.EffectiveWebDarkMode(cfg));
         if (darkScript.Length > 0) await SafeScript(core, darkScript);
         if (cfg.Browser.AutoTranslateForeignPages && cfg.Browser.TranslationProvider == TranslationProvider.Microsoft)
@@ -309,8 +328,11 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     {
         var p = _settings.Current.Privacy;
         if (tab.IsPrivate && p.StrictPrivateTabs) { e.State = CoreWebView2PermissionState.Deny; return; }
+        // Real device geolocation is never allowed. Ask/Custom are implemented by
+        // the document-start mock below, so deleting or bypassing it still cannot
+        // reach WebView2's native location provider.
         if (e.PermissionKind == CoreWebView2PermissionKind.Geolocation)
-            e.State = p.LocationPermission == LocationPolicy.Deny ? CoreWebView2PermissionState.Deny : CoreWebView2PermissionState.Allow;
+            e.State = CoreWebView2PermissionState.Deny;
         if ((e.PermissionKind == CoreWebView2PermissionKind.Camera || e.PermissionKind == CoreWebView2PermissionKind.Microphone) && p.CameraMicrophonePermission == PermissionPolicy.Deny) e.State = CoreWebView2PermissionState.Deny;
     }
 
@@ -355,7 +377,14 @@ chrome.webview.addEventListener('message', e => { const x=e.data; if(!x || x.kin
 const get = function(success,error){ if(typeof success!=='function') throw new TypeError('Callback must be a function'); request(success,error,false); };
 const watch = function(success,error){ if(typeof success!=='function') throw new TypeError('Callback must be a function'); const wid=++watchSeq; const ask=()=>{if(!watches.has(wid))return; request(x=>{success(x);},error,true);}; watches.set(wid,ask); ask(); return wid; };
 const clear = function(id){ watches.delete(Number(id)); };
-try{Object.defineProperties(geo,{getCurrentPosition:{value:get,configurable:true},watchPosition:{value:watch,configurable:true},clearWatch:{value:clear,configurable:true}});}catch{}
+ const methods={getCurrentPosition:{value:get,writable:false,configurable:false},watchPosition:{value:watch,writable:false,configurable:false},clearWatch:{value:clear,writable:false,configurable:false}};
+ try{Object.defineProperties(geo,methods);}catch{}
+ try{const proto=Object.getPrototypeOf(geo);if(proto)Object.defineProperties(proto,methods);}catch{}
+})();";
+
+    private const string WebRtcBlockScript = @"(() => {
+const block = name => { try { Object.defineProperty(window,name,{value:undefined,writable:false,configurable:false}); } catch {} };
+block('RTCPeerConnection'); block('webkitRTCPeerConnection');
 })();";
 
     private static string ResolveUserAgent(BrowserSettings settings) => settings.UserAgent switch
@@ -372,7 +401,23 @@ try{Object.defineProperties(geo,{getCurrentPosition:{value:get,configurable:true
     private static bool IsThirdParty(string topUrl, string requestUrl)
     {
         if (!Uri.TryCreate(topUrl, UriKind.Absolute, out var top) || !Uri.TryCreate(requestUrl, UriKind.Absolute, out var request)) return false;
-        return !request.Host.Equals(top.Host, StringComparison.OrdinalIgnoreCase) && !request.Host.EndsWith('.' + top.Host, StringComparison.OrdinalIgnoreCase);
+        return !SiteKey(top.Host).Equals(SiteKey(request.Host), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string SiteKey(string host)
+    {
+        if (System.Net.IPAddress.TryParse(host, out _)) return host;
+        var labels = host.Trim('.').Split('.');
+        if (labels.Length <= 2) return host;
+        var suffix2 = string.Join(".", labels.Skip(labels.Length - 2));
+        var commonSecondLevel = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "co.uk", "org.uk", "ac.uk", "com.cn", "net.cn", "org.cn", "com.au", "net.au", "org.au",
+            "co.jp", "co.kr", "co.nz", "com.br", "com.mx", "com.sg", "com.hk", "com.tw"
+        };
+        return commonSecondLevel.Contains(suffix2) && labels.Length >= 3
+            ? string.Join(".", labels.Skip(labels.Length - 3))
+            : suffix2;
     }
 
     private static bool TryMedia(string url, string? contentType, string? contentDisposition, out string kind)
@@ -405,6 +450,17 @@ try{Object.defineProperties(geo,{getCurrentPosition:{value:get,configurable:true
         if (script.Length > 0) _darkScriptIds[core] = await core.AddScriptToExecuteOnDocumentCreatedAsync(script);
     }
 
+    private async Task RegisterWebRtcProtectionAsync(CoreWebView2 core)
+    {
+        if (_webRtcScriptIds.TryGetValue(core, out var oldId))
+        {
+            _webRtcScriptIds.Remove(core);
+            try { core.RemoveScriptToExecuteOnDocumentCreated(oldId); } catch { }
+        }
+        if (_settings.Current.Privacy.DisableWebRtc)
+            _webRtcScriptIds[core] = await core.AddScriptToExecuteOnDocumentCreatedAsync(WebRtcBlockScript);
+    }
+
     private async Task RegisterUserScriptsAsync(CoreWebView2 core)
     {
         if (_userScriptIds.TryGetValue(core, out var oldId))
@@ -427,6 +483,7 @@ try{Object.defineProperties(geo,{getCurrentPosition:{value:get,configurable:true
                     new CoreWebView2EnvironmentOptions { Language = LocalizationService.CurrentLanguage });
 
             Directory.CreateDirectory(_privateDataPath);
+            PrivateDataGuard.ProtectAndWatch(_privateDataPath);
             return _privateEnvironmentTask ??= CoreWebView2Environment.CreateAsync(null, _privateDataPath,
                 new CoreWebView2EnvironmentOptions
                 {
@@ -460,7 +517,11 @@ try{Object.defineProperties(geo,{getCurrentPosition:{value:get,configurable:true
             var userAgent = ResolveUserAgent(_settings.Current.Browser);
             core.Settings.UserAgent = userAgent;
             await RegisterDarkModeAsync(core);
+            await RegisterWebRtcProtectionAsync(core);
             await RegisterUserScriptsAsync(core);
+            core.Profile.PreferredTrackingPreventionLevel = _settings.Current.Privacy.BlockThirdPartyCookies
+                ? CoreWebView2TrackingPreventionLevel.Strict
+                : CoreWebView2TrackingPreventionLevel.Balanced;
             if (reloadPages) core.Reload();
         }
     }
@@ -481,8 +542,10 @@ try{Object.defineProperties(geo,{getCurrentPosition:{value:get,configurable:true
         if (view.CoreWebView2 is { } core)
         {
             _darkScriptIds.Remove(core);
+            _webRtcScriptIds.Remove(core);
             _userScriptIds.Remove(core);
             _scriptBridges.Remove(core);
+            if (_scriptBrokers.TryGetValue(core, out var broker)) { _scriptBrokers.Remove(core); broker.Dispose(); }
             if (tab.IsPrivate) _ = core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile);
             try { core.RemoveHostObjectFromScript("zzzUserscript"); } catch { }
         }
@@ -499,6 +562,59 @@ try{Object.defineProperties(geo,{getCurrentPosition:{value:get,configurable:true
         _views.Clear();
         try { if (Directory.Exists(_privateDataPath)) Directory.Delete(_privateDataPath, true); } catch { }
     }
+}
+
+internal static class PrivateDataGuard
+{
+    private static readonly object Gate = new();
+    private static readonly HashSet<string> Watched = new(StringComparer.OrdinalIgnoreCase);
+
+    public static void ProtectAndWatch(string path)
+    {
+        lock (Gate)
+        {
+            if (!Watched.Add(path)) return;
+        }
+        try
+        {
+            var currentUser = WindowsIdentity.GetCurrent().User;
+            if (currentUser is not null)
+            {
+                var security = new DirectorySecurity();
+                security.SetAccessRuleProtection(true, false);
+                const InheritanceFlags inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+                security.AddAccessRule(new FileSystemAccessRule(currentUser, FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
+                security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
+                new DirectoryInfo(path).SetAccessControl(security);
+            }
+        }
+        catch { }
+        try { EncryptFile(path); } catch { }
+        StartCleanupWatchdog(path);
+    }
+
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern bool EncryptFile(string path);
+
+    private static void StartCleanupWatchdog(string path)
+    {
+        try
+        {
+            var script = "$targetPid=" + Process.GetCurrentProcess().Id + ";$target=" + QuotePowerShell(path) +
+                ";try{Wait-Process -Id $targetPid -ErrorAction SilentlyContinue}catch{};" +
+                "for($i=0;$i -lt 240;$i++){try{if(Test-Path -LiteralPath $target){Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop};break}catch{Start-Sleep -Milliseconds 500}}";
+            var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+            Process.Start(new ProcessStartInfo("powershell.exe", "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " + encoded)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+        }
+        catch { }
+    }
+
+    private static string QuotePowerShell(string value) => "'" + value.Replace("'", "''") + "'";
 }
 
 public sealed class AppServices : IDisposable

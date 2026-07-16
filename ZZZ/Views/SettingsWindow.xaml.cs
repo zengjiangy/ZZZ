@@ -4,13 +4,15 @@ using ZZZ.Configuration;
 using ZZZ.ViewModels;
 using ZZZ.Services;
 using System.Text.Json;
+using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace ZZZ.Views;
 
 public partial class SettingsWindow : Window
 {
     private readonly MainViewModel _main;
-    private AppSettings _working;
+    private AppSettings _working = new();
     private string _pendingBackgroundSource = string.Empty;
     public SettingsWindow(MainViewModel main, bool showAdvanced = false)
     {
@@ -32,6 +34,7 @@ public partial class SettingsWindow : Window
         StorageModeBox.ItemsSource = new[] { Choice(DataStorageMode.LocalAppData, "LocalData"), Choice(DataStorageMode.Portable, "PortableMode"), Choice(DataStorageMode.Custom, "CustomData") };
         SearchEngineBox.ItemsSource = _working.SearchEngines;
         CurrentDataPathText.Text = $"{LocalizationService.Text("CurrentDataPath")}: {AppPaths.Root}";
+        RefreshBackgroundColorPreview();
         if (showAdvanced) SettingsTabs.SelectedItem = AdvancedTab;
     }
     private async void Save_Click(object sender, RoutedEventArgs e)
@@ -79,6 +82,35 @@ public partial class SettingsWindow : Window
         _pendingBackgroundSource = string.Empty;
         _working.StartPage.BackgroundImage = string.Empty;
         BackgroundImageBox.Text = string.Empty;
+    }
+    private void ChooseBackgroundColor_Click(object sender, RoutedEventArgs e)
+    {
+        using var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true, AnyColor = true };
+        try
+        {
+            var color = (Color)ColorConverter.ConvertFromString(_working.StartPage.BackgroundColor);
+            dialog.Color = System.Drawing.Color.FromArgb(color.A, color.R, color.G, color.B);
+        }
+        catch { }
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+        SetBackgroundColor($"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}");
+    }
+    private void PresetBackgroundColor_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string color }) SetBackgroundColor(color);
+    }
+    private void BackgroundColorBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshBackgroundColorPreview();
+    private void SetBackgroundColor(string color)
+    {
+        _working.StartPage.BackgroundColor = color;
+        if (BackgroundColorBox is not null) BackgroundColorBox.Text = color;
+        RefreshBackgroundColorPreview();
+    }
+    private void RefreshBackgroundColorPreview()
+    {
+        if (BackgroundColorPreview is null) return;
+        try { BackgroundColorPreview.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(_working.StartPage.BackgroundColor)); }
+        catch { BackgroundColorPreview.Background = Brushes.Transparent; }
     }
     private void BrowseDataPath_Click(object sender, RoutedEventArgs e)
     {

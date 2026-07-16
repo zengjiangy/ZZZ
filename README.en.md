@@ -4,7 +4,7 @@
 
 ZZZ is a lightweight, open-source browser for Windows, built with .NET Framework 4.8, WPF, and Microsoft WebView2. It uses the system WebView2 Runtime instead of bundling Chromium and can keep all browser data beside the executable for portable use.
 
-Current version: **1.5.3**
+Current version: **1.7.0**
 
 ## Download
 
@@ -12,8 +12,8 @@ Download the latest build from [GitHub Releases](https://github.com/zengjiangy/Z
 
 | File | Platform |
 |---|---|
-| `ZZZ.exe` | Standard Windows build, recommended for x64 devices |
-| `ZZZ-v1.5.3-win-arm64.exe` | Native Windows ARM64 build |
+| `ZZZ-v1.7.0-win-x64.exe` | Native Windows x64 build |
+| `ZZZ-v1.7.0-win-arm64.exe` | Native Windows ARM64 build |
 
 No installer is required. Windows 10 or 11, .NET Framework 4.8, and the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) are required.
 
@@ -28,13 +28,14 @@ The WinGet community submission is under review in [microsoft/winget-pkgs#402023
 - Built-in translation, userscripts, configurable user agent, and web theme rendering
 - Download manager with file size, progress, MIME type, timestamps, save path, and double-click open
 - Optional external downloaders and media players, with a warning for cookie-authenticated resources
-- DNT, GPC, third-party tracking-cookie restrictions, WebRTC controls, and configurable site permissions
+- DNT, GPC, strict third-party cookie blocking, document-start/frame-level WebRTC controls, and native-deny geolocation mocking
+- Streaming userscript requests with WebView2 session cookies, progress/readystate events, abort/timeout support, and background `GM_download`
 - Local AppData, portable, or custom browser-data storage
 - English, Simplified Chinese, Traditional Chinese, and Japanese UI resources
 
 ## Private tabs
 
-Use the main menu or press `Ctrl+Shift+N`. Private tabs use isolated WebView2 profiles and do not retain history, sessions, cache, cookies, or online search suggestions. Files explicitly downloaded and bookmarks explicitly saved by the user remain persistent.
+Use the main menu or press `Ctrl+Shift+N`. Private tabs use isolated WebView2 profiles and do not retain history, sessions, cache, cookies, or online search suggestions. Their temporary directory is protected by a current-user ACL, EFS when available, a crash/force-close cleanup watchdog, and next-launch cleanup. Files explicitly downloaded and bookmarks explicitly saved by the user remain persistent.
 
 ## Portable mode
 
@@ -63,7 +64,7 @@ Open **Settings → Backup → Data and cookie storage location**, select **Port
 dotnet build ZZZ.sln -c Release
 ```
 
-The standard single-file output is `ZZZ\bin\Release\net48\ZZZ.exe`. Managed dependencies and x86, x64, and ARM64 WebView2 native loaders are embedded in the executable.
+The x64 single-file output is `ZZZ\bin\Release\net48\ZZZ.exe`. Managed dependencies and x86, x64, and ARM64 WebView2 native loaders are embedded in the executable.
 
 Native ARM64 build:
 

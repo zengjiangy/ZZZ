@@ -4,7 +4,7 @@
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF 和 Microsoft WebView2 构建。它使用系统中的 WebView2 Runtime，不额外捆绑 Chromium，并支持把浏览器数据存放在程序目录中，方便随身携带。
 
-当前版本：**1.5.3**
+当前版本：**1.7.0**
 
 ## 下载与运行
 
@@ -12,8 +12,8 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 
 | 文件 | 适用平台 |
 |---|---|
-| `ZZZ.exe` | 普通 Windows 版本，推荐 x64 设备使用 |
-| `ZZZ-v1.5.3-win-arm64.exe` | Windows ARM64 原生版本 |
+| `ZZZ-v1.7.0-win-x64.exe` | Windows x64 原生版本 |
+| `ZZZ-v1.7.0-win-arm64.exe` | Windows ARM64 原生版本 |
 
 下载后直接运行即可，无需安装。系统需要：
 
@@ -44,14 +44,15 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 ### 隐私与权限
 
 - 独立隐私标签页，不保留历史、会话、缓存、Cookie 或在线搜索联想
-- DNT、GPC、第三方跟踪 Cookie 限制和 WebRTC 限制
+- DNT、GPC、严格第三方 Cookie 阻止，以及 document-start/子框架级 WebRTC 限制
 - 可配置摄像头、麦克风、通知、剪贴板和位置等站点权限
-- 支持为位置请求返回自定义坐标
+- 原生位置权限始终拒绝；可在隔离的模拟层中询问或返回自定义坐标
 
 ### 网页增强
 
 - 内置微软网页翻译和 Google 兼容代理翻译，可自动翻译语言不一致的页面
 - Tampermonkey 风格用户脚本，支持匹配规则、运行时机、`@require`、资源和常用 `GM_*` API
+- `GM_xmlhttpRequest` 支持当前 WebView2 会话 Cookie、上传/下载进度、细粒度 readyState、超时、中止和流式大响应；`GM_download` 使用后台文件流
 - 可切换 User-Agent，并提供智能或强制网页明暗渲染
 - F12 开发者工具可在设置中启用或关闭
 
@@ -67,7 +68,7 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 
 通过主菜单或 `Ctrl+Shift+N` 新建隐私标签页。每个隐私标签页使用独立的 WebView2 隐私配置，不与普通标签页或其他隐私标签页共享 Cookie、缓存和本地存储，也不会写入 ZZZ 历史记录或会话恢复数据。
 
-关闭标签页后，其临时网页数据会被删除。用户主动保存的下载文件和书签仍会保留。
+隐私数据目录使用仅当前用户可访问的 ACL，并在系统支持时使用 EFS 加密。关闭标签页后会清理数据；独立监护进程会在主程序崩溃或被强制结束后继续重试清理，下次启动仍会执行兜底清理。用户主动保存的下载文件和书签仍会保留。
 
 ## 网页翻译
 
@@ -110,7 +111,7 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 dotnet build ZZZ.sln -c Release
 ```
 
-普通版本输出位于 `ZZZ\bin\Release\net48\ZZZ.exe`。托管依赖和 x86、x64、ARM64 WebView2 原生加载器会嵌入到单个 EXE 中。
+x64 版本输出位于 `ZZZ\bin\Release\net48\ZZZ.exe`。托管依赖和 x86、x64、ARM64 WebView2 原生加载器会嵌入到单个 EXE 中。
 
 ARM64 构建命令：
 

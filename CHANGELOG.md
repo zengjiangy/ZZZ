@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.0 - 2026-07-16
+
+- 将 WebRTC 禁用迁移到 `AddScriptToExecuteOnDocumentCreatedAsync`，在首个页面脚本前生效，并自动覆盖主文档和子框架；保护属性不可删除或重写。
+- 原生 WebView2 地理位置权限现在无条件拒绝；询问和自定义坐标只通过不可配置的 document-start 模拟层返回，删除 JS 包装也无法读取真实位置。
+- “阻止第三方 Cookie”改为严格模式：所有跨站请求都剥离 Cookie，响应后清除跨站写入，并将 WebView2 Tracking Prevention 提升为 Strict；设置文案明确提示可能影响跨站登录。
+- 隐私资料目录新增当前用户专属 ACL、可用时 EFS 加密和独立清理监护进程；程序崩溃或被强制结束后仍会重试删除，启动时保留兜底清理。
+- 重绘工具栏刷新图标，修复圆弧越界和箭头比例问题。
+- 启动页背景颜色增加实时色块、系统取色器和常用颜色预设，同时保留十六进制精确输入。
+- 重构 `GM_xmlhttpRequest` 为后台流式事件桥：支持上传/下载进度、readyState 1–4、超时、中止、文本/JSON/Blob/ArrayBuffer 响应、当前 WebView2 会话 Cookie，并移除 16 MB 固定响应上限。
+- `GM_download` 改为 C# 后台专用文件流下载，支持 Cookie、进度、超时、中止、冲突文件名避让和临时文件清理。
+- 发布原生 Windows x64 与 Windows ARM64 两个单文件版本。
+
 ## 1.5.3 - 2026-07-14
 
 - 地址栏新增自动完成下拉框：输入时即时匹配最近历史记录，并支持鼠标选择、上下键切换、回车执行和 Esc 关闭。
