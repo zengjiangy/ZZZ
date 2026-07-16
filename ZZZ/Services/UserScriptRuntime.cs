@@ -489,7 +489,7 @@ public static class UserScriptRuntime
         {
             script = new { name = script.Name, @namespace = script.Namespace, version = script.Version, description = script.Description, runAt = script.RunAt },
             scriptMetaStr = string.Empty,
-            version = "1.9.0",
+            version = "1.9.5",
             handler = "ZZZ Userscript"
         });
         var resources = JsonSerializer.Serialize(script.Resources);

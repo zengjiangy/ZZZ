@@ -122,7 +122,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
 {
     private const string ChromeDesktopUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
     private readonly ISettingsService _settings;
-    private readonly IAdBlockService _adBlock;
+    private readonly AdBlockManager _adBlock;
     private readonly IUserScriptService _scripts;
     private readonly IHistoryService _history;
     private readonly IDownloadService _downloads;
@@ -134,6 +134,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private readonly Dictionary<CoreWebView2, string> _userScriptIds = [];
     private readonly Dictionary<CoreWebView2, UserScriptBridge> _scriptBridges = [];
     private readonly Dictionary<CoreWebView2, UserScriptNetworkBroker> _scriptBrokers = [];
+    private readonly Dictionary<CoreWebView2, AdBlockElementPickerSession> _adBlockPickers = [];
     private readonly Dictionary<BrowserTabViewModel, CoreWebView2Environment> _tabEnvironments = [];
     private readonly object _environmentGate = new();
     private readonly string _privateDataPath = Path.Combine(AppPaths.PrivateWebViewRoot, Guid.NewGuid().ToString("N"));
@@ -144,10 +145,25 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     public event EventHandler<BrowserShortcutEventArgs>? ShortcutRequested;
 
 
-    public BrowserLifecycleService(ISettingsService settings, IAdBlockService adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy, ITranslationService translation)
+    public BrowserLifecycleService(ISettingsService settings, AdBlockManager adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy, ITranslationService translation)
     {
         _settings = settings; _adBlock = adBlock; _scripts = scripts; _history = history; _downloads = downloads; _privacy = privacy; _translation = translation;
+        _adBlock.RulesChanged += AdBlock_RulesChanged;
         CleanupStalePrivateData();
+    }
+
+    private void AdBlock_RulesChanged(object? sender, EventArgs e)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null) return;
+        dispatcher.BeginInvoke(new Action(async () =>
+        {
+            foreach (var weak in _views.Values.ToArray())
+            {
+                if (!weak.TryGetTarget(out var view) || view.CoreWebView2 is not { } core) continue;
+                await ApplyCosmeticRulesAsync(core, core.Source, _settings.Current.Advanced.EnableAdBlock);
+            }
+        }));
     }
 
     public async Task InitializeAsync(WebView2 view, BrowserTabViewModel tab)
@@ -239,13 +255,38 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         await RegisterWebRtcProtectionAsync(core);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(LocationBootstrap);
         await RegisterUserScriptsAsync(core);
+        try
+        {
+            var picker = await AdBlockElementPicker.AttachAsync(core, LocalizationService.Text("BlockThisAd"), async rule =>
+            {
+                try
+                {
+                    await _adBlock.AddElementRuleAsync(rule);
+                    await ApplyCosmeticRulesAsync(core, tab.Url, _settings.Current.Advanced.EnableAdBlock);
+                    tab.Status = LocalizationService.Text("AdElementBlocked");
+                }
+                catch
+                {
+                    tab.Status = LocalizationService.Text("AdElementBlockFailed");
+                    throw;
+                }
+            });
+            _adBlockPickers[core] = picker;
+        }
+        catch { }
     }
 
     private void OnWebResourceRequested(BrowserTabViewModel tab, CoreWebView2WebResourceRequestedEventArgs e)
     {
         var cfg = _settings.Current;
         var url = e.Request.Uri;
-        if (cfg.Advanced.EnableAdBlock && _adBlock.ShouldBlock(url))
+        if (cfg.Advanced.EnableAdBlock && _adBlock.ShouldBlock(new AdBlockRequestContext
+        {
+            Url = url,
+            DocumentUrl = tab.Url,
+            ResourceType = ToAdBlockResourceType(e.ResourceContext, url, tab.Url),
+            Method = e.Request.Method
+        }))
         {
             if (_tabEnvironments.TryGetValue(tab, out var environment))
                 e.Response = environment.CreateWebResourceResponse(null, 403, "Blocked by ZZZ", "Content-Type: text/plain");
@@ -267,6 +308,13 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
             try { e.Request.Headers.RemoveHeader("Cookie"); } catch { }
         }
         if (cfg.Advanced.EnableResourceSniffer && TryMedia(url, null, null, out var kind)) tab.AddMedia(url, kind);
+    }
+
+    private static AdBlockResourceType ToAdBlockResourceType(CoreWebView2WebResourceContext context, string requestUrl, string documentUrl)
+    {
+        var isSubdocument = context == CoreWebView2WebResourceContext.Document &&
+            !string.Equals(requestUrl.TrimEnd('/'), documentUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+        return AdBlockWebView2Mapper.FromWebView2(context, isSubdocument);
     }
 
     private async Task OnWebResourceResponseReceivedAsync(CoreWebView2 core, BrowserTabViewModel tab, CoreWebView2WebResourceResponseReceivedEventArgs e)
@@ -308,6 +356,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         tab.Status = string.Empty;
         if (!tab.IsPrivate) await _history.AddAsync(tab.Title, tab.Url);
         var cfg = _settings.Current;
+        if (cfg.Advanced.EnableAdBlock) await ApplyCosmeticRulesAsync(core, tab.Url);
         var darkScript = WebDarkModeService.ScriptFor(ThemeService.EffectiveWebDarkMode(cfg));
         if (darkScript.Length > 0) await SafeScript(core, darkScript);
         if (cfg.Browser.AutoTranslateForeignPages && cfg.Browser.TranslationProvider == TranslationProvider.Microsoft)
@@ -444,6 +493,12 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
 
     private static async Task SafeScript(CoreWebView2 core, string script) { try { await core.ExecuteScriptAsync(script); } catch { } }
 
+    private async Task ApplyCosmeticRulesAsync(CoreWebView2 core, string documentUrl, bool enabled = true)
+    {
+        var css = enabled ? _adBlock.GetCosmeticCss(documentUrl) : string.Empty;
+        await SafeScript(core, AdBlockElementPicker.BuildApplyCssScript(css));
+    }
+
     private async Task RegisterDarkModeAsync(CoreWebView2 core)
     {
         if (_darkScriptIds.TryGetValue(core, out var oldId))
@@ -548,6 +603,7 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
                 ? CoreWebView2TrackingPreventionLevel.Strict
                 : CoreWebView2TrackingPreventionLevel.Balanced;
             if (reloadPages) core.Reload();
+            else await ApplyCosmeticRulesAsync(core, core.Source, _settings.Current.Advanced.EnableAdBlock);
         }
     }
 
@@ -570,6 +626,7 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
             _webRtcScriptIds.Remove(core);
             _userScriptIds.Remove(core);
             _scriptBridges.Remove(core);
+            if (_adBlockPickers.TryGetValue(core, out var picker)) { _adBlockPickers.Remove(core); picker.Dispose(); }
             if (_scriptBrokers.TryGetValue(core, out var broker)) { _scriptBrokers.Remove(core); broker.Dispose(); }
             if (tab.IsPrivate) _ = core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile);
             try { core.RemoveHostObjectFromScript("zzzUserscript"); } catch { }
@@ -583,6 +640,7 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
     public void Close(BrowserTabViewModel tab) => Sleep(tab);
     public void Dispose()
     {
+        _adBlock.RulesChanged -= AdBlock_RulesChanged;
         foreach (var tab in _views.Keys.ToArray()) Close(tab);
         _views.Clear();
         try { if (Directory.Exists(_privateDataPath)) Directory.Delete(_privateDataPath, true); } catch { }
@@ -648,7 +706,7 @@ public sealed class AppServices : IDisposable
     public BookmarkService Bookmarks { get; } = new();
     public HistoryService History { get; } = new();
     public UserScriptService UserScripts { get; } = new();
-    public AdBlockService AdBlock { get; } = new();
+    public AdBlockManager AdBlock { get; } = new();
     public SessionService Session { get; } = new();
     public DownloadService Downloads { get; }
     public PrivacyService Privacy { get; }
@@ -670,5 +728,5 @@ public sealed class AppServices : IDisposable
         Directory.CreateDirectory(AppPaths.Root);
         await Task.WhenAll(Settings.LoadAsync(), Bookmarks.LoadAsync(), History.LoadAsync(), UserScripts.LoadAsync(), AdBlock.LoadAsync(), Session.LoadAsync());
     }
-    public void Dispose() { Browser.Dispose(); Translation.Dispose(); }
+    public void Dispose() { Browser.Dispose(); AdBlock.Dispose(); Translation.Dispose(); }
 }

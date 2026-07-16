@@ -4,7 +4,7 @@
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF 和 Microsoft WebView2 构建。它使用系统中的 WebView2 Runtime，不额外捆绑 Chromium，并支持把浏览器数据存放在程序目录中，方便随身携带。
 
-当前版本：**1.9.0**
+当前版本：**1.9.5**
 
 ## 下载与运行
 
@@ -12,8 +12,8 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 
 | 文件 | 适用平台 |
 |---|---|
-| `ZZZ-v1.9.0-win-x64.exe` | Windows x64 原生版本 |
-| `ZZZ-v1.9.0-win-arm64.exe` | Windows ARM64 原生版本 |
+| `ZZZ-v1.9.5-win-x64.exe` | Windows x64 原生版本 |
+| `ZZZ-v1.9.5-win-arm64.exe` | Windows ARM64 原生版本 |
 
 下载后直接运行即可，无需安装。系统需要：
 
@@ -54,7 +54,8 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 - 内置微软网页翻译和 Google 兼容代理翻译，可自动翻译语言不一致的页面
 - Tampermonkey 风格用户脚本，支持匹配规则、运行时机、`@require`、`@grant`、`@connect`、资源和常用 `GM_*` API
 - `GM_xmlhttpRequest` 支持当前 WebView2 会话 Cookie、上传/下载进度、细粒度 readyState、超时、中止及最高 64 MB 内存响应；`GM_download` 使用后台文件流处理更大文件
-- 内置网络广告拦截支持常用 ABP/EasyList 域名、通配符、锚点和例外规则
+- 广告拦截内置 EasyList、EasyList China、CJX's Annoyance List、EasyPrivacy 和 Adblock Warning Removal List，可添加自定义订阅和 ABP 规则，并支持手动、每天或每周更新
+- 支持 ABP 网络与元素隐藏规则；可在网页中右键“标记为广告”，立即隐藏元素并保存站点规则
 - 可切换 User-Agent，并提供智能或强制网页明暗渲染
 - F12 开发者工具可在设置中启用或关闭
 

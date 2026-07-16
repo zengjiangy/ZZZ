@@ -73,6 +73,7 @@ public partial class SettingsWindow : Window
     private async void ImportSettings_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "JSON|*.json" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportSettings")) { await _main.Services.Settings.ImportAsync(d.FileName); _working = Clone(_main.Services.Settings.Current); DataContext = _working; SearchEngineBox.ItemsSource = _working.SearchEngines; LoadTranslationTarget(_working.Browser.TranslationTargetLanguage); } }
     private async void ExportRules_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "Text|*.txt", FileName = "zzz-blocking-rules.txt" }; if (d.ShowDialog() == true) await _main.Services.AdBlock.ExportAsync(d.FileName); }
     private async void ImportRules_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "Text|*.txt|All files|*.*" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportRules")) await _main.Services.AdBlock.ImportAsync(d.FileName); }
+    private void ManageAdBlock_Click(object sender, RoutedEventArgs e) => new AdBlockSettingsWindow(_main) { Owner = this }.ShowDialog();
     private void BrowseBackground_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif", CheckFileExists = true };

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.5 - 2026-07-16
+
+- 补齐繁体中文、日语、韩语、葡萄牙语、西班牙语、俄语、法语和德语的全部浏览器设置与界面文案，不再依赖英语回退。
+- 新增广告拦截规则订阅管理，内置 EasyList、EasyList China、CJX's Annoyance List、EasyPrivacy 和 Adblock Warning Removal List，并显示每项规则数、更新时间与错误状态。
+- 支持添加和删除自定义 HTTPS 规则订阅、直接编辑 ABP 兼容自定义规则，以及手动、每天或每周更新；立即更新使用条件请求，失败时保留上次可用缓存。
+- 扩展 ABP 网络规则的资源类型、站点域名、第三方和例外选项处理，并支持元素隐藏规则；网页右键菜单可将当前元素标记为广告、立即隐藏并保存站点规则。
+- 发布原生 Windows x64 与 Windows ARM64 两个单文件版本，并提供 SHA-256 校验和。
+
 ## 1.9.0 - 2026-07-16
 
 - 第三方 Cookie 站点判定改用随程序嵌入的完整 Public Suffix List，正确区分 `github.io`、`appspot.com`、`co.za` 等公共或私有后缀租户，并采用 schemeful site 边界。

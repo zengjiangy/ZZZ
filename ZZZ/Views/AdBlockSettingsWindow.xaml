@@ -1,0 +1,87 @@
+<Window x:Class="ZZZ.Views.AdBlockSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource AppWindowStyle}"
+        Title="{DynamicResource AdBlockSettingsTitle}"
+        Width="840" Height="760" MinWidth="700" MinHeight="600"
+        WindowStartupLocation="CenterOwner">
+    <Grid Background="{DynamicResource WindowBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="70"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="64"/>
+        </Grid.RowDefinitions>
+
+        <Border Background="{DynamicResource ChromeBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Margin="22,0" VerticalAlignment="Center">
+                <TextBlock Text="{DynamicResource AdBlockSettingsTitle}" FontSize="21" FontWeight="SemiBold"/>
+                <TextBlock Text="{DynamicResource AdBlockSettingsSubtitle}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24,18,24,24" MaxWidth="740">
+                <TextBlock Text="{DynamicResource RuleSubscriptions}" FontSize="18" FontWeight="SemiBold"/>
+                <TextBlock Text="{DynamicResource RuleSubscriptionsHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,3,0,10"/>
+                <Border Background="{DynamicResource AddressBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="14">
+                    <ItemsControl x:Name="SubscriptionList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1" Padding="0,7,0,10" Margin="0,0,0,4">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox IsChecked="{Binding Subscription.Enabled}" VerticalAlignment="Top" Margin="0,3,10,0" ToolTip="{DynamicResource Enabled}" AutomationProperties.Name="{DynamicResource Enabled}"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{Binding Subscription.Name}" FontSize="15" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource MutedBrush}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Subscription.Url}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Subscription.Url}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Content="{DynamicResource Remove}" Click="RemoveSubscription_Click" CommandParameter="{Binding}" IsEnabled="{Binding CanRemove}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
+                <Grid Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource UpdateSchedule}" FontWeight="SemiBold"/>
+                        <ComboBox x:Name="UpdateIntervalBox" Width="220" HorizontalAlignment="Left" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding UpdateInterval}"/>
+                    </StackPanel>
+                    <Button x:Name="UpdateNowButton" Grid.Column="1" Content="{DynamicResource UpdateNow}" Click="UpdateNow_Click" Style="{StaticResource PrimaryButton}" VerticalAlignment="Bottom" Margin="12,0,0,4"/>
+                </Grid>
+                <TextBlock x:Name="UpdateStatusText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <TextBlock Text="{DynamicResource AdBlockReloadHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+
+                <TextBlock Text="{DynamicResource CustomSubscription}" FontSize="18" FontWeight="SemiBold" Margin="0,22,0,8"/>
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="{DynamicResource SubscriptionName}" Margin="0,0,8,3"/>
+                    <TextBlock Grid.Column="1" Text="{DynamicResource SubscriptionUrl}" Margin="0,0,8,3"/>
+                    <TextBox x:Name="SubscriptionNameBox" Grid.Row="1" ToolTip="{DynamicResource SubscriptionName}" Margin="0,0,8,0"/>
+                    <TextBox x:Name="SubscriptionUrlBox" Grid.Row="1" Grid.Column="1" ToolTip="{DynamicResource SubscriptionUrl}" Margin="0,0,8,0"/>
+                    <Button Grid.Row="1" Grid.Column="2" Content="{DynamicResource AddSubscription}" Click="AddSubscription_Click" Style="{StaticResource PrimaryButton}"/>
+                </Grid>
+
+                <TextBlock Text="{DynamicResource CustomRules}" FontSize="18" FontWeight="SemiBold" Margin="0,22,0,2"/>
+                <TextBlock Text="{DynamicResource CustomRulesHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,0,0,7"/>
+                <TextBox x:Name="CustomRulesBox" AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" FontFamily="Consolas" MinHeight="170"/>
+                <TextBlock x:Name="RuleSummaryText" Foreground="{DynamicResource MutedBrush}" Margin="0,6,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Background="{DynamicResource ChromeBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="18,0">
+                <Button Content="{DynamicResource Close}" Click="Cancel_Click" Margin="0,0,8,0"/>
+                <Button x:Name="SaveButton" Content="{DynamicResource Save}" Click="Save_Click" Style="{StaticResource PrimaryButton}" MinWidth="90"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
