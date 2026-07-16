@@ -4,7 +4,7 @@
 
 ZZZ is a lightweight, open-source browser for Windows, built with .NET Framework 4.8, WPF, and Microsoft WebView2. It uses the system WebView2 Runtime instead of bundling Chromium and can keep all browser data beside the executable for portable use.
 
-Current version: **1.7.0**
+Current version: **1.7.1**
 
 ## Download
 
@@ -12,8 +12,8 @@ Download the latest build from [GitHub Releases](https://github.com/zengjiangy/Z
 
 | File | Platform |
 |---|---|
-| `ZZZ-v1.7.0-win-x64.exe` | Native Windows x64 build |
-| `ZZZ-v1.7.0-win-arm64.exe` | Native Windows ARM64 build |
+| `ZZZ-v1.7.1-win-x64.exe` | Native Windows x64 build |
+| `ZZZ-v1.7.1-win-arm64.exe` | Native Windows ARM64 build |
 
 No installer is required. Windows 10 or 11, .NET Framework 4.8, and the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) are required.
 
@@ -21,6 +21,7 @@ The WinGet community submission is under review in [microsoft/winget-pkgs#402023
 
 ## Highlights
 
+- Interface language selection for Simplified Chinese, Traditional Chinese, English, Japanese, Korean, Portuguese, Spanish, Russian, French, and German
 - Tabs, session restore, private tabs, and horizontal or vertical split view
 - Combined address and search box with history matches and live suggestions
 - Grouped bookmarks, bookmark HTML import/export, and a customizable native start page

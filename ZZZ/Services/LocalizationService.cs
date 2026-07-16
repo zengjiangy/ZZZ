@@ -26,7 +26,28 @@ public static class LocalizationService
         new("zh-CN", "简体中文"),
         new("zh-TW", "繁體中文"),
         new("en-US", "English"),
-        new("ja-JP", "日本語")
+        new("ja-JP", "日本語"),
+        new("ko-KR", "한국어"),
+        new("pt-BR", "Português"),
+        new("es-ES", "Español"),
+        new("ru-RU", "Русский"),
+        new("fr-FR", "Français"),
+        new("de-DE", "Deutsch")
+    ];
+
+    public static IReadOnlyList<LanguageOption> TranslationTargets { get; } =
+    [
+        new("zh-CN", "简体中文"),
+        new("zh-TW", "繁體中文"),
+        new("en", "English"),
+        new("ja", "日本語"),
+        new("ko", "한국어"),
+        new("pt", "Português"),
+        new("es", "Español"),
+        new("ru", "Русский"),
+        new("fr", "Français"),
+        new("de", "Deutsch"),
+        new("__custom__", "自定义 / Custom")
     ];
 
     public static string CurrentLanguage { get; private set; } = "en-US";
@@ -61,6 +82,12 @@ public static class LocalizationService
         if (name.StartsWith("zh-Hant", StringComparison.OrdinalIgnoreCase) || name is "zh-TW" or "zh-HK" or "zh-MO") return "zh-TW";
         if (name.StartsWith("zh", StringComparison.OrdinalIgnoreCase)) return "zh-CN";
         if (name.StartsWith("ja", StringComparison.OrdinalIgnoreCase)) return "ja-JP";
+        if (name.StartsWith("ko", StringComparison.OrdinalIgnoreCase)) return "ko-KR";
+        if (name.StartsWith("pt", StringComparison.OrdinalIgnoreCase)) return "pt-BR";
+        if (name.StartsWith("es", StringComparison.OrdinalIgnoreCase)) return "es-ES";
+        if (name.StartsWith("ru", StringComparison.OrdinalIgnoreCase)) return "ru-RU";
+        if (name.StartsWith("fr", StringComparison.OrdinalIgnoreCase)) return "fr-FR";
+        if (name.StartsWith("de", StringComparison.OrdinalIgnoreCase)) return "de-DE";
         return "en-US";
     }
 }

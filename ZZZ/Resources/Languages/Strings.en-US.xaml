@@ -27,4 +27,5 @@
     <sys:String x:Key="DevToolsHint">F12 opens Microsoft Edge DevTools. “Settings &gt; Experiments” is inside the DevTools window, not ZZZ settings. ZZZ automatically suppresses the obsolete webhint-disabled notice.</sys:String>
     <sys:String x:Key="SearchSuggestion">Suggestion</sys:String><sys:String x:Key="ExternalDownloadCookieHint">External downloaders usually cannot receive the current page's cookies or signed-in session. For resources that require login or Cookie authentication, prefer the built-in downloader.</sys:String>
     <sys:String x:Key="ChooseColor">Choose color…</sys:String>
+    <sys:String x:Key="TranslationTargetPreset">Target language</sys:String><sys:String x:Key="CustomLanguageCodeHint">Enter a BCP 47 language code, such as it, ar or vi</sys:String><sys:String x:Key="CustomLanguageRequired">Enter a custom target language code.</sys:String>
 </ResourceDictionary>

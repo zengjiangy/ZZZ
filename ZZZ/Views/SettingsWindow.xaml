@@ -37,7 +37,11 @@
                     <Button Tag="#312E81" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#312E81" ToolTip="#312E81"/>
                     <Button Tag="#3F1D38" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#3F1D38" ToolTip="#3F1D38"/>
                     <Button Tag="#0F3D3E" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#0F3D3E" ToolTip="#0F3D3E"/>
-                    <Button Tag="#F3F4F6" Click="PresetBackgroundColor_Click" Width="32" Height="26" Background="#F3F4F6" ToolTip="#F3F4F6"/>
+                    <Button Tag="#F3F4F6" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#F3F4F6" ToolTip="#F3F4F6"/>
+                    <Button Tag="#DC2626" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#DC2626" ToolTip="#DC2626"/>
+                    <Button Tag="#EA580C" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#EA580C" ToolTip="#EA580C"/>
+                    <Button Tag="#EAB308" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#EAB308" ToolTip="#EAB308"/>
+                    <Button Tag="#86EFAC" Click="PresetBackgroundColor_Click" Width="32" Height="26" Background="#86EFAC" ToolTip="#86EFAC"/>
                 </WrapPanel>
                 <DockPanel Margin="0,8,0,0"><Button DockPanel.Dock="Right" Content="{DynamicResource RestoreDefaultBackground}" Click="ResetBackground_Click" Margin="8,0,0,0"/><Button DockPanel.Dock="Right" Content="{DynamicResource Browse}" Click="BrowseBackground_Click" Margin="8,0,0,0"/><TextBox x:Name="BackgroundImageBox" Text="{Binding StartPage.BackgroundImage}" IsReadOnly="True"/></DockPanel>
                 <TextBlock Text="{DynamicResource BackgroundOpacity}" Margin="0,10,0,2"/><Slider Minimum="0.1" Maximum="1" TickFrequency="0.1" IsSnapToTickEnabled="True" Value="{Binding StartPage.BackgroundOpacity}"/>
@@ -62,7 +66,9 @@
                 <TextBlock Text="{DynamicResource UserAgent}" FontWeight="SemiBold" Margin="0,16,0,2"/><ComboBox x:Name="UserAgentBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Browser.UserAgent}"/>
                 <TextBlock Text="{DynamicResource CustomUserAgent}" Margin="0,10,0,2"/><TextBox Text="{Binding Browser.CustomUserAgent}"/>
                 <TextBlock Text="{DynamicResource TranslationProvider}" FontWeight="SemiBold" Margin="0,16,0,2"/><ComboBox x:Name="TranslationProviderBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Browser.TranslationProvider}"/>
-                <TextBlock Text="{DynamicResource TranslationTarget}" Margin="0,10,0,2"/><TextBox Text="{Binding Browser.TranslationTargetLanguage}" ToolTip="zh-CN / en / ja / fr"/>
+                <TextBlock Text="{DynamicResource TranslationTargetPreset}" Margin="0,10,0,2"/>
+                <ComboBox x:Name="TranslationTargetBox" DisplayMemberPath="DisplayName" SelectedValuePath="Code" SelectionChanged="TranslationTargetBox_SelectionChanged"/>
+                <TextBox x:Name="CustomTranslationTargetBox" Margin="0,7,0,0" Visibility="Collapsed" ToolTip="{DynamicResource CustomLanguageCodeHint}"/>
                 <CheckBox Content="{DynamicResource AutoTranslate}" IsChecked="{Binding Browser.AutoTranslateForeignPages}" Margin="0,9,0,0"/>
                 <TextBlock Text="{DynamicResource ExternalPlayer}" FontWeight="SemiBold" Margin="0,16,0,2"/><TextBox Text="{Binding Advanced.ExternalPlayerPath}"/>
             </StackPanel></ScrollViewer></TabItem>

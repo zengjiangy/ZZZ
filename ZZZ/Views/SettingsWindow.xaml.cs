@@ -30,6 +30,8 @@ public partial class SettingsWindow : Window
         BookmarkStyleBox.ItemsSource = new[] { Choice(BookmarkTileStyle.Compact, "BookmarkCompact"), Choice(BookmarkTileStyle.Rounded, "BookmarkRounded"), Choice(BookmarkTileStyle.Card, "BookmarkCard") };
         UserAgentBox.ItemsSource = new[] { Choice(UserAgentPreset.DefaultDesktop, "DefaultDesktop"), Choice(UserAgentPreset.AndroidMobile, "AndroidMobile"), Choice(UserAgentPreset.IPad, "IPad"), Choice(UserAgentPreset.Custom, "Custom") };
         TranslationProviderBox.ItemsSource = new[] { Choice(TranslationProvider.Google, "GoogleTranslate"), Choice(TranslationProvider.Microsoft, "MicrosoftTranslate") };
+        TranslationTargetBox.ItemsSource = LocalizationService.TranslationTargets;
+        LoadTranslationTarget(_working.Browser.TranslationTargetLanguage);
         DownloadModeBox.ItemsSource = new[] { Choice(DownloadMode.BuiltIn, "BuiltIn"), Choice(DownloadMode.External, "External") };
         StorageModeBox.ItemsSource = new[] { Choice(DataStorageMode.LocalAppData, "LocalData"), Choice(DataStorageMode.Portable, "PortableMode"), Choice(DataStorageMode.Custom, "CustomData") };
         SearchEngineBox.ItemsSource = _working.SearchEngines;
@@ -44,6 +46,7 @@ public partial class SettingsWindow : Window
             SearchGrid.CommitEdit();
             if (_working.Storage.Mode == DataStorageMode.Custom && string.IsNullOrWhiteSpace(_working.Storage.CustomPath))
                 throw new InvalidOperationException(LocalizationService.Text("CustomPathRequired"));
+            _working.Browser.TranslationTargetLanguage = ReadTranslationTarget();
             if (!string.IsNullOrWhiteSpace(_pendingBackgroundSource) && File.Exists(_pendingBackgroundSource))
             {
                 var relative = "start-background" + Path.GetExtension(_pendingBackgroundSource).ToLowerInvariant();
@@ -67,7 +70,7 @@ public partial class SettingsWindow : Window
     }
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
     private async void ExportSettings_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "JSON|*.json", FileName = "zzz-settings.json" }; if (d.ShowDialog() == true) await _main.Services.Settings.ExportAsync(d.FileName); }
-    private async void ImportSettings_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "JSON|*.json" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportSettings")) { await _main.Services.Settings.ImportAsync(d.FileName); _working = Clone(_main.Services.Settings.Current); DataContext = _working; SearchEngineBox.ItemsSource = _working.SearchEngines; } }
+    private async void ImportSettings_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "JSON|*.json" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportSettings")) { await _main.Services.Settings.ImportAsync(d.FileName); _working = Clone(_main.Services.Settings.Current); DataContext = _working; SearchEngineBox.ItemsSource = _working.SearchEngines; LoadTranslationTarget(_working.Browser.TranslationTargetLanguage); } }
     private async void ExportRules_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "Text|*.txt", FileName = "zzz-blocking-rules.txt" }; if (d.ShowDialog() == true) await _main.Services.AdBlock.ExportAsync(d.FileName); }
     private async void ImportRules_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "Text|*.txt|All files|*.*" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportRules")) await _main.Services.AdBlock.ImportAsync(d.FileName); }
     private void BrowseBackground_Click(object sender, RoutedEventArgs e)
@@ -111,6 +114,29 @@ public partial class SettingsWindow : Window
         if (BackgroundColorPreview is null) return;
         try { BackgroundColorPreview.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(_working.StartPage.BackgroundColor)); }
         catch { BackgroundColorPreview.Background = Brushes.Transparent; }
+    }
+    private void TranslationTargetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CustomTranslationTargetBox is null) return;
+        CustomTranslationTargetBox.Visibility = TranslationTargetBox.SelectedValue as string == "__custom__"
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+    private void LoadTranslationTarget(string code)
+    {
+        var normalized = (code ?? string.Empty).Trim();
+        var preset = LocalizationService.TranslationTargets.FirstOrDefault(x =>
+            x.Code != "__custom__" && string.Equals(x.Code, normalized, StringComparison.OrdinalIgnoreCase));
+        TranslationTargetBox.SelectedValue = preset?.Code ?? "__custom__";
+        CustomTranslationTargetBox.Text = preset is null ? normalized : string.Empty;
+    }
+    private string ReadTranslationTarget()
+    {
+        var selected = TranslationTargetBox.SelectedValue as string;
+        if (selected != "__custom__" && !string.IsNullOrWhiteSpace(selected)) return selected!;
+        var custom = CustomTranslationTargetBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(custom)) throw new InvalidOperationException(LocalizationService.Text("CustomLanguageRequired"));
+        return custom;
     }
     private void BrowseDataPath_Click(object sender, RoutedEventArgs e)
     {

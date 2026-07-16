@@ -12,4 +12,5 @@
     <sys:String x:Key="DevToolsHint">F12 で Microsoft Edge DevTools を開きます。「Settings &gt; Experiments」は ZZZ の設定ではなく DevTools ウィンドウ内にあります。古い webhint 無効通知は ZZZ が自動的に非表示にします。</sys:String>
     <sys:String x:Key="SearchSuggestion">検索候補</sys:String><sys:String x:Key="ExternalDownloadCookieHint">外部ダウンローダーは通常、現在のページの Cookie やサインイン セッションを受け取れません。ログインまたは Cookie 認証が必要なリソースには内蔵ダウンローダーを優先してください。</sys:String>
     <sys:String x:Key="ChooseColor">色を選択…</sys:String>
+    <sys:String x:Key="TranslationTargetPreset">翻訳先の言語</sys:String><sys:String x:Key="CustomLanguageCodeHint">it、ar、vi などの BCP 47 言語コードを入力</sys:String><sys:String x:Key="CustomLanguageRequired">カスタムの翻訳先言語コードを入力してください。</sys:String>
 </ResourceDictionary>

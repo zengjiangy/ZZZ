@@ -12,4 +12,5 @@
     <sys:String x:Key="DevToolsHint">F12 會開啟 Microsoft Edge 開發人員工具。「設定 &gt; 實驗」位於開發人員工具視窗內，而不在 ZZZ 設定中；ZZZ 會自動隱藏已過時的 webhint 關閉提示。</sys:String>
     <sys:String x:Key="SearchSuggestion">搜尋建議</sys:String><sys:String x:Key="ExternalDownloadCookieHint">外部下載器通常無法取得目前頁面的 Cookie 與登入工作階段。下載需要登入或 Cookie 驗證的資源時，建議優先使用內建下載。</sys:String>
     <sys:String x:Key="ChooseColor">選擇顏色…</sys:String>
+    <sys:String x:Key="TranslationTargetPreset">翻譯目標語言</sys:String><sys:String x:Key="CustomLanguageCodeHint">輸入 BCP 47 語言代碼，例如 it、ar 或 vi</sys:String><sys:String x:Key="CustomLanguageRequired">請輸入自訂目標語言代碼。</sys:String>
 </ResourceDictionary>
