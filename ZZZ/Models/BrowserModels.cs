@@ -32,6 +32,7 @@ public sealed class UserScript
     public List<string> Excludes { get; set; } = [];
     public List<string> Requires { get; set; } = [];
     public List<string> Grants { get; set; } = [];
+    public List<string> Connects { get; set; } = [];
     public Dictionary<string, string> Resources { get; set; } = [];
     public string RunAt { get; set; } = "document-idle";
     public bool NoFrames { get; set; }

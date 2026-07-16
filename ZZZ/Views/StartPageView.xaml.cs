@@ -41,36 +41,39 @@ public partial class StartPageView : UserControl
     private void ApplySettings()
     {
         var settings = App.Services.Settings.Current.StartPage;
-        try { Root.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(settings.BackgroundColor)); }
-        catch { Root.Background = new SolidColorBrush(Color.FromRgb(16, 24, 38)); }
+        Color background;
+        try { background = (Color)ColorConverter.ConvertFromString(settings.BackgroundColor); }
+        catch { background = Color.FromRgb(16, 24, 38); }
+        Root.Background = new SolidColorBrush(background);
         BackgroundImage.Opacity = Math.Max(0.1, Math.Min(1, settings.BackgroundOpacity));
         BookmarksList.Visibility = settings.ShowBookmarks ? Visibility.Visible : Visibility.Collapsed;
         RefreshBookmarks();
-        LoadBackground(AppPaths.ResolveDataFile(settings.BackgroundImage));
+        var hasImage = LoadBackground(AppPaths.ResolveDataFile(settings.BackgroundImage));
+        ApplyContrast(background, hasImage);
     }
 
-    private void LoadBackground(string path)
+    private bool LoadBackground(string path)
     {
         StopAnimation();
         BackgroundImage.Source = null;
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return false;
         try
         {
             if (Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase))
             {
                 _animationStream = File.OpenRead(path);
                 var decoder = new GifBitmapDecoder(_animationStream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnDemand);
-                if (decoder.Frames.Count == 0) return;
+                if (decoder.Frames.Count == 0) return false;
                 var first = decoder.Frames[0];
                 var scale = Math.Min(1d, 1280d / Math.Max(1, first.PixelWidth));
                 var pixelsPerFrame = Math.Max(1d, first.PixelWidth * scale * first.PixelHeight * scale);
                 var frameBudget = Math.Max(1, Math.Min(90, (int)(24_000_000d / pixelsPerFrame)));
                 _frames = decoder.Frames.Take(frameBudget).Select(x => ScaleForDisplay(x, 1280)).ToArray();
                 _delays = decoder.Frames.Take(_frames.Count).Select(ReadDelay).ToArray();
-                if (_frames.Count == 0) return;
+                if (_frames.Count == 0) return false;
                 BackgroundImage.Source = _frames[0];
                 if (_frames.Count > 1) StartAnimation();
-                return;
+                return true;
             }
 
             var bitmap = new BitmapImage();
@@ -81,13 +84,34 @@ public partial class StartPageView : UserControl
             bitmap.EndInit();
             bitmap.Freeze();
             BackgroundImage.Source = bitmap;
+            return true;
         }
         catch
         {
             BackgroundImage.Source = null;
             _animationStream?.Dispose();
             _animationStream = null;
+            return false;
         }
+    }
+
+    private void ApplyContrast(Color background, bool hasImage)
+    {
+        var useDarkText = !hasImage && RelativeLuminance(background) > 0.42;
+        Resources["StartPageForegroundBrush"] = new SolidColorBrush(useDarkText ? Color.FromRgb(16, 24, 38) : Colors.White);
+        Resources["StartPagePanelBrush"] = new SolidColorBrush(useDarkText ? Color.FromArgb(224, 255, 255, 255) : Color.FromArgb(217, 32, 39, 51));
+        Resources["StartPageBorderBrush"] = new SolidColorBrush(useDarkText ? Color.FromArgb(72, 16, 24, 38) : Color.FromArgb(68, 255, 255, 255));
+        BackgroundScrim.Background = new SolidColorBrush(hasImage ? Color.FromArgb(76, 0, 0, 0) : Colors.Transparent);
+    }
+
+    private static double RelativeLuminance(Color color)
+    {
+        static double Linear(byte value)
+        {
+            var channel = value / 255d;
+            return channel <= 0.04045 ? channel / 12.92 : Math.Pow((channel + 0.055) / 1.055, 2.4);
+        }
+        return 0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
     }
 
     private static BitmapSource ScaleForDisplay(BitmapSource source, int maximumWidth)

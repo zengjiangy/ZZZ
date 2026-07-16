@@ -139,6 +139,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private readonly string _privateDataPath = Path.Combine(AppPaths.PrivateWebViewRoot, Guid.NewGuid().ToString("N"));
     private Task<CoreWebView2Environment>? _environmentTask;
     private Task<CoreWebView2Environment>? _privateEnvironmentTask;
+    private bool _runtimeUpdateNotified;
     public event Action<string, bool>? NewTabRequested;
     public event EventHandler<BrowserShortcutEventArgs>? ShortcutRequested;
 
@@ -216,6 +217,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         core.NavigationCompleted += async (_, e) => await OnNavigationCompletedAsync(core, tab, e);
         core.NewWindowRequested += (_, e) => { e.Handled = true; NewTabRequested?.Invoke(e.Uri, tab.IsPrivate); };
         core.PermissionRequested += (_, e) => OnPermissionRequested(tab, e);
+        core.ProcessFailed += (_, e) => OnProcessFailed(core, tab, e);
         core.WebMessageReceived += async (_, e) => await OnWebMessageReceivedAsync(core, tab, e);
         core.DownloadStarting += (_, e) => _downloads.Handle(e);
         core.WebResourceResponseReceived += async (_, e) => await OnWebResourceResponseReceivedAsync(core, tab, e);
@@ -260,7 +262,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         // Strict mode intentionally strips every cross-site Cookie header. This can
         // require users to temporarily disable the option for federated sign-in or
         // payment widgets, but it makes the setting match its privacy promise.
-        if (cfg.Privacy.BlockThirdPartyCookies && IsThirdParty(tab.Url, url))
+        if (cfg.Privacy.BlockThirdPartyCookies && SiteClassifier.IsThirdParty(tab.Url, url))
         {
             try { e.Request.Headers.RemoveHeader("Cookie"); } catch { }
         }
@@ -270,7 +272,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private async Task OnWebResourceResponseReceivedAsync(CoreWebView2 core, BrowserTabViewModel tab, CoreWebView2WebResourceResponseReceivedEventArgs e)
     {
         var url = e.Request.Uri;
-        if (_settings.Current.Privacy.BlockThirdPartyCookies && IsThirdParty(tab.Url, url))
+        if (_settings.Current.Privacy.BlockThirdPartyCookies && SiteClassifier.IsThirdParty(tab.Url, url))
         {
             try
             {
@@ -336,6 +338,33 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         if ((e.PermissionKind == CoreWebView2PermissionKind.Camera || e.PermissionKind == CoreWebView2PermissionKind.Microphone) && p.CameraMicrophonePermission == PermissionPolicy.Deny) e.State = CoreWebView2PermissionState.Deny;
     }
 
+    private void OnProcessFailed(CoreWebView2 core, BrowserTabViewModel tab, CoreWebView2ProcessFailedEventArgs e)
+    {
+        Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                switch (e.ProcessFailedKind)
+                {
+                    case CoreWebView2ProcessFailedKind.RenderProcessExited:
+                    case CoreWebView2ProcessFailedKind.FrameRenderProcessExited:
+                        tab.Status = LocalizationService.Text("RendererRecovered");
+                        core.Reload();
+                        break;
+                    case CoreWebView2ProcessFailedKind.BrowserProcessExited:
+                        Sleep(tab);
+                        tab.Status = LocalizationService.Text("BrowserRecovered");
+                        tab.RefreshStartPage();
+                        break;
+                    case CoreWebView2ProcessFailedKind.RenderProcessUnresponsive:
+                        tab.Status = LocalizationService.Text("RendererUnresponsive");
+                        break;
+                }
+            }
+            catch { tab.Status = LocalizationService.Text("BrowserRecoveryFailed"); }
+        }));
+    }
+
     private async Task OnWebMessageReceivedAsync(CoreWebView2 core, BrowserTabViewModel tab, CoreWebView2WebMessageReceivedEventArgs e)
     {
         try
@@ -398,28 +427,6 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
     private static bool IsGoogleTranslate(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
         (uri.Host.Equals("translate.google.com", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".translate.goog", StringComparison.OrdinalIgnoreCase));
 
-    private static bool IsThirdParty(string topUrl, string requestUrl)
-    {
-        if (!Uri.TryCreate(topUrl, UriKind.Absolute, out var top) || !Uri.TryCreate(requestUrl, UriKind.Absolute, out var request)) return false;
-        return !SiteKey(top.Host).Equals(SiteKey(request.Host), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string SiteKey(string host)
-    {
-        if (System.Net.IPAddress.TryParse(host, out _)) return host;
-        var labels = host.Trim('.').Split('.');
-        if (labels.Length <= 2) return host;
-        var suffix2 = string.Join(".", labels.Skip(labels.Length - 2));
-        var commonSecondLevel = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "co.uk", "org.uk", "ac.uk", "com.cn", "net.cn", "org.cn", "com.au", "net.au", "org.au",
-            "co.jp", "co.kr", "co.nz", "com.br", "com.mx", "com.sg", "com.hk", "com.tw"
-        };
-        return commonSecondLevel.Contains(suffix2) && labels.Length >= 3
-            ? string.Join(".", labels.Skip(labels.Length - 3))
-            : suffix2;
-    }
-
     private static bool TryMedia(string url, string? contentType, string? contentDisposition, out string kind)
     {
         var clean = url.Split('?', '#')[0];
@@ -468,9 +475,19 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
             _userScriptIds.Remove(core);
             try { core.RemoveScriptToExecuteOnDocumentCreated(oldId); } catch { }
         }
-        if (!_settings.Current.Advanced.EnableUserScripts) return;
-        if (!_scripts.Items.Any(x => x.Enabled) || !_scriptBridges.TryGetValue(core, out var bridge)) return;
-        var bootstrap = UserScriptRuntime.BuildBootstrap(_scripts.Items, bridge.SecretForBootstrap);
+        if (!_scriptBrokers.TryGetValue(core, out var broker)) return;
+        if (!_settings.Current.Advanced.EnableUserScripts)
+        {
+            broker.ConfigurePolicies(Array.Empty<UserScript>());
+            return;
+        }
+        if (!_scripts.Items.Any(x => x.Enabled) || !_scriptBridges.TryGetValue(core, out var bridge))
+        {
+            broker.ConfigurePolicies(Array.Empty<UserScript>());
+            return;
+        }
+        var authorizationTokens = broker.ConfigurePolicies(_scripts.Items);
+        var bootstrap = UserScriptRuntime.BuildBootstrap(_scripts.Items, bridge.SecretForBootstrap, authorizationTokens);
         if (bootstrap.Length > 0) _userScriptIds[core] = await core.AddScriptToExecuteOnDocumentCreatedAsync(bootstrap);
     }
 
@@ -479,18 +496,26 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
         lock (_environmentGate)
         {
             if (!isPrivate)
-                return _environmentTask ??= CoreWebView2Environment.CreateAsync(null, AppPaths.WebViewData,
-                    new CoreWebView2EnvironmentOptions { Language = LocalizationService.CurrentLanguage });
+                return _environmentTask ??= CreateEnvironmentAsync(AppPaths.WebViewData, false);
 
             Directory.CreateDirectory(_privateDataPath);
             PrivateDataGuard.ProtectAndWatch(_privateDataPath);
-            return _privateEnvironmentTask ??= CoreWebView2Environment.CreateAsync(null, _privateDataPath,
-                new CoreWebView2EnvironmentOptions
-                {
-                    Language = LocalizationService.CurrentLanguage,
-                    AdditionalBrowserArguments = "--disk-cache-size=1 --media-cache-size=1 --disable-features=AutofillServerCommunication,NetworkPrediction"
-                });
+            return _privateEnvironmentTask ??= CreateEnvironmentAsync(_privateDataPath, true);
         }
+    }
+
+    private async Task<CoreWebView2Environment> CreateEnvironmentAsync(string dataPath, bool isPrivate)
+    {
+        var options = new CoreWebView2EnvironmentOptions { Language = LocalizationService.CurrentLanguage };
+        if (isPrivate) options.AdditionalBrowserArguments = "--disk-cache-size=1 --media-cache-size=1 --disable-features=AutofillServerCommunication,NetworkPrediction";
+        var environment = await CoreWebView2Environment.CreateAsync(null, dataPath, options);
+        environment.NewBrowserVersionAvailable += (_, _) => Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_runtimeUpdateNotified) return;
+            _runtimeUpdateNotified = true;
+            foreach (var tab in _views.Keys) tab.Status = LocalizationService.Text("RuntimeUpdateAvailable");
+        }));
+        return environment;
     }
 
     private void CleanupStalePrivateData()

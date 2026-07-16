@@ -5,6 +5,10 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZZZ", "ZZZ\ZZZ.csproj", "{FC76D15F-E0F8-434C-9736-BC9A8A8B7E81}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{9AF75C90-D415-4504-9D9F-5E79C1C95DAD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZZZ.BoundaryTests", "tests\ZZZ.BoundaryTests\ZZZ.BoundaryTests.csproj", "{17912B2A-02FC-4381-BA42-4C1DB3529924}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +22,12 @@ Global
 		{FC76D15F-E0F8-434C-9736-BC9A8A8B7E81}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FC76D15F-E0F8-434C-9736-BC9A8A8B7E81}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FC76D15F-E0F8-434C-9736-BC9A8A8B7E81}.Release|Any CPU.Build.0 = Release|Any CPU
+		{17912B2A-02FC-4381-BA42-4C1DB3529924}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{17912B2A-02FC-4381-BA42-4C1DB3529924}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{17912B2A-02FC-4381-BA42-4C1DB3529924}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{17912B2A-02FC-4381-BA42-4C1DB3529924}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{17912B2A-02FC-4381-BA42-4C1DB3529924} = {9AF75C90-D415-4504-9D9F-5E79C1C95DAD}
 	EndGlobalSection
 EndGlobal

@@ -4,7 +4,7 @@
 
 ZZZ is a lightweight, open-source browser for Windows, built with .NET Framework 4.8, WPF, and Microsoft WebView2. It uses the system WebView2 Runtime instead of bundling Chromium and can keep all browser data beside the executable for portable use.
 
-Current version: **1.7.1**
+Current version: **1.9.0**
 
 ## Download
 
@@ -12,8 +12,8 @@ Download the latest build from [GitHub Releases](https://github.com/zengjiangy/Z
 
 | File | Platform |
 |---|---|
-| `ZZZ-v1.7.1-win-x64.exe` | Native Windows x64 build |
-| `ZZZ-v1.7.1-win-arm64.exe` | Native Windows ARM64 build |
+| `ZZZ-v1.9.0-win-x64.exe` | Native Windows x64 build |
+| `ZZZ-v1.9.0-win-arm64.exe` | Native Windows ARM64 build |
 
 No installer is required. Windows 10 or 11, .NET Framework 4.8, and the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) are required.
 
@@ -29,8 +29,11 @@ The WinGet community submission is under review in [microsoft/winget-pkgs#402023
 - Built-in translation, userscripts, configurable user agent, and web theme rendering
 - Download manager with file size, progress, MIME type, timestamps, save path, and double-click open
 - Optional external downloaders and media players, with a warning for cookie-authenticated resources
-- DNT, GPC, strict third-party cookie blocking, document-start/frame-level WebRTC controls, and native-deny geolocation mocking
-- Streaming userscript requests with WebView2 session cookies, progress/readystate events, abort/timeout support, and background `GM_download`
+- DNT, GPC, Public-Suffix-List-aware third-party cookie blocking, document-start/frame-level WebRTC controls, and native-deny geolocation mocking
+- Userscript `@grant`/`@connect` enforcement in both JavaScript and the C# broker, with isolated per-script authorization
+- Userscript requests with WebView2 session cookies, progress/readystate events, abort/timeout support, a 64 MB in-memory response limit, and streaming background `GM_download`
+- Common ABP/EasyList network rules, exception rules, and wildcard filters in the built-in blocker
+- WebView2 process recovery, runtime update notices, and periodic non-private session snapshots
 - Local AppData, portable, or custom browser-data storage
 - English, Simplified Chinese, Traditional Chinese, and Japanese UI resources
 
@@ -77,3 +80,4 @@ dotnet build ZZZ\ZZZ.csproj -c Release -p:PlatformTarget=ARM64 -p:OutputPath=out
 
 - Issues: [GitHub Issues](https://github.com/zengjiangy/ZZZ/issues)
 - License: [MIT License](LICENSE)
+- Third-party components and data: [Third-party notices](THIRD-PARTY-NOTICES.md)

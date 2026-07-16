@@ -1,0 +1,32 @@
+name: Build and boundary tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        run: dotnet restore ZZZ.sln
+      - name: Build x64
+        run: dotnet build ZZZ/ZZZ.csproj -c Release -p:PlatformTarget=x64 -p:OutputPath=${{ github.workspace }}/artifacts/win-x64/
+      - name: Run privacy and permission boundary tests
+        run: dotnet run --project tests/ZZZ.BoundaryTests/ZZZ.BoundaryTests.csproj -c Release
+      - name: Build ARM64
+        run: dotnet build ZZZ/ZZZ.csproj -c Release -p:PlatformTarget=ARM64 -p:OutputPath=${{ github.workspace }}/artifacts/win-arm64/
+      - name: Audit vulnerable packages
+        run: dotnet list ZZZ/ZZZ.csproj package --vulnerable --include-transitive
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZZZ-unsigned-builds
+          path: |
+            artifacts/win-x64/ZZZ.exe
+            artifacts/win-arm64/ZZZ.exe

@@ -4,7 +4,7 @@
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF 和 Microsoft WebView2 构建。它使用系统中的 WebView2 Runtime，不额外捆绑 Chromium，并支持把浏览器数据存放在程序目录中，方便随身携带。
 
-当前版本：**1.7.1**
+当前版本：**1.9.0**
 
 ## 下载与运行
 
@@ -12,8 +12,8 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 
 | 文件 | 适用平台 |
 |---|---|
-| `ZZZ-v1.7.1-win-x64.exe` | Windows x64 原生版本 |
-| `ZZZ-v1.7.1-win-arm64.exe` | Windows ARM64 原生版本 |
+| `ZZZ-v1.9.0-win-x64.exe` | Windows x64 原生版本 |
+| `ZZZ-v1.9.0-win-arm64.exe` | Windows ARM64 原生版本 |
 
 下载后直接运行即可，无需安装。系统需要：
 
@@ -33,7 +33,7 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 - 地址栏统一处理网址与搜索，支持历史记录匹配和实时搜索联想
 - 原生轻量启动页，可使用纯色、图片或动态 GIF 背景，并按分组展示书签
 - F11 沉浸式全屏、页内查找、打印，以及将网页保存为 PDF 或 MHT
-- 应用和网页明暗主题，可切换简体中文、繁体中文、英语和日语界面
+- 应用和网页明暗主题；启动页会根据背景亮度自动调整文字和面板对比度
 
 ### 书签与数据
 
@@ -45,15 +45,16 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 ### 隐私与权限
 
 - 独立隐私标签页，不保留历史、会话、缓存、Cookie 或在线搜索联想
-- DNT、GPC、严格第三方 Cookie 阻止，以及 document-start/子框架级 WebRTC 限制
+- DNT、GPC、基于完整 Public Suffix List 的严格第三方 Cookie 阻止，以及 document-start/子框架级 WebRTC 限制
 - 可配置摄像头、麦克风、通知、剪贴板和位置等站点权限
 - 原生位置权限始终拒绝；可在隔离的模拟层中询问或返回自定义坐标
 
 ### 网页增强
 
 - 内置微软网页翻译和 Google 兼容代理翻译，可自动翻译语言不一致的页面
-- Tampermonkey 风格用户脚本，支持匹配规则、运行时机、`@require`、资源和常用 `GM_*` API
-- `GM_xmlhttpRequest` 支持当前 WebView2 会话 Cookie、上传/下载进度、细粒度 readyState、超时、中止和流式大响应；`GM_download` 使用后台文件流
+- Tampermonkey 风格用户脚本，支持匹配规则、运行时机、`@require`、`@grant`、`@connect`、资源和常用 `GM_*` API
+- `GM_xmlhttpRequest` 支持当前 WebView2 会话 Cookie、上传/下载进度、细粒度 readyState、超时、中止及最高 64 MB 内存响应；`GM_download` 使用后台文件流处理更大文件
+- 内置网络广告拦截支持常用 ABP/EasyList 域名、通配符、锚点和例外规则
 - 可切换 User-Agent，并提供智能或强制网页明暗渲染
 - F12 开发者工具可在设置中启用或关闭
 
@@ -77,7 +78,7 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 
 ## 用户脚本
 
-打开“库 → 用户脚本”即可新建脚本或导入 `.user.js` 文件。支持 `document-start`、`document-end`、`document-idle`、`@match`、`@include`、`@exclude`、`@require`、`@resource` 和常用 `GM_*` API。
+打开“库 → 用户脚本”即可新建脚本或导入 `.user.js` 文件。支持 `document-start`、`document-end`、`document-idle`、`@match`、`@include`、`@exclude`、`@require`、`@resource` 和常用 `GM_*` API。特权 API 必须通过 `@grant` 明确声明；`GM_xmlhttpRequest` 与 `GM_download` 的跨域目标还必须通过 `@connect` 声明。未声明的能力会同时在 JavaScript 和 C# 后端拒绝。
 
 ## 便携模式
 
@@ -124,3 +125,4 @@ dotnet build ZZZ\ZZZ.csproj -c Release -p:PlatformTarget=ARM64 -p:OutputPath=out
 
 - 问题反馈：[GitHub Issues](https://github.com/zengjiangy/ZZZ/issues)
 - 开源许可：[MIT License](LICENSE)
+- 第三方组件与数据：[Third-party notices](THIRD-PARTY-NOTICES.md)

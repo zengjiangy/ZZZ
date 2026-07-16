@@ -339,9 +339,16 @@ public sealed class HistoryService : IHistoryService
 
 public sealed class SessionService
 {
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
     public IReadOnlyList<string> Urls { get; private set; } = [];
     public async Task LoadAsync() => Urls = await JsonFiles.LoadAsync(AppPaths.Session, () => new List<string>());
-    public Task SaveAsync(IEnumerable<string> urls) => JsonFiles.SaveAsync(AppPaths.Session, urls.Where(x => Uri.TryCreate(x, UriKind.Absolute, out _)).Distinct().Take(50).ToList());
+    public async Task SaveAsync(IEnumerable<string> urls)
+    {
+        var snapshot = urls.Where(x => Uri.TryCreate(x, UriKind.Absolute, out _)).Distinct().Take(50).ToList();
+        await _saveGate.WaitAsync();
+        try { await JsonFiles.SaveAsync(AppPaths.Session, snapshot); }
+        finally { _saveGate.Release(); }
+    }
 }
 
 public interface IUserScriptService
@@ -439,6 +446,7 @@ public sealed class UserScriptService : IUserScriptService
                 case "exclude": if (value.Length > 0) script.Excludes.Add(value); break;
                 case "require": if (value.Length > 0) script.Requires.Add(value); break;
                 case "grant": if (value.Length > 0) script.Grants.Add(value); break;
+                case "connect": if (value.Length > 0) script.Connects.Add(value); break;
                 case "run-at": if (value.Length > 0) script.RunAt = value; break;
                 case "noframes": script.NoFrames = true; break;
                 case "resource":
@@ -462,6 +470,7 @@ public sealed class UserScriptService : IUserScriptService
         script.Excludes ??= [];
         script.Requires ??= [];
         script.Grants ??= [];
+        script.Connects ??= [];
         script.Resources ??= [];
         if (string.IsNullOrWhiteSpace(script.Match)) script.Match = "*";
         if (string.IsNullOrWhiteSpace(script.RunAt)) script.RunAt = "document-idle";
@@ -483,7 +492,7 @@ public sealed class UserScriptService : IUserScriptService
     private static HttpClient CreateClient()
     {
         var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/1.7.1");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/1.9.0");
         return client;
     }
 }
@@ -520,26 +529,77 @@ public interface IAdBlockService
 
 public sealed class AdBlockService : IAdBlockService
 {
-    private string[] _rules = [];
-    private static readonly string[] Defaults = ["doubleclick.net", "googlesyndication.com", "googleadservices.com", "adnxs.com", "tracking.*", "/ads/", "/advertising/"];
+    private AdBlockRuleSet _rules = new(Array.Empty<string>());
+    private static readonly string[] Defaults = ["||doubleclick.net^", "||googlesyndication.com^", "||googleadservices.com^", "||adnxs.com^", "tracking.*", "/ads/", "/advertising/"];
     public async Task LoadAsync()
     {
         Directory.CreateDirectory(AppPaths.Root);
         if (!File.Exists(AppPaths.BlockingRules)) File.WriteAllLines(AppPaths.BlockingRules, Defaults);
-        _rules = File.ReadAllLines(AppPaths.BlockingRules).Select(x => x.Trim()).Where(x => x.Length > 0 && !x.StartsWith("!", StringComparison.Ordinal) && !x.StartsWith("#", StringComparison.Ordinal)).ToArray();
+        _rules = new AdBlockRuleSet(File.ReadAllLines(AppPaths.BlockingRules));
         await Task.CompletedTask;
     }
-    public bool ShouldBlock(string url)
-    {
-        foreach (var rule in _rules)
-        {
-            if (rule.Contains('*') && Regex.IsMatch(url, Regex.Escape(rule).Replace("\\*", ".*"), RegexOptions.IgnoreCase)) return true;
-            if (!rule.Contains('*') && url.IndexOf(rule, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-        }
-        return false;
-    }
+    public bool ShouldBlock(string url) => _rules.ShouldBlock(url);
     public async Task ImportAsync(string path) { File.Copy(path, AppPaths.BlockingRules, true); await LoadAsync(); }
     public Task ExportAsync(string path) { File.Copy(AppPaths.BlockingRules, path, true); return Task.CompletedTask; }
+}
+
+public sealed class AdBlockRuleSet
+{
+    private readonly IReadOnlyList<Regex> _blocking;
+    private readonly IReadOnlyList<Regex> _exceptions;
+
+    public AdBlockRuleSet(IEnumerable<string> rules)
+    {
+        var blocking = new List<Regex>();
+        var exceptions = new List<Regex>();
+        foreach (var raw in rules.Take(200_000))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith("!", StringComparison.Ordinal) || line.StartsWith("#", StringComparison.Ordinal) ||
+                line.StartsWith("[", StringComparison.Ordinal) || line.Contains("##") || line.Contains("#@#")) continue;
+            var isException = line.StartsWith("@@", StringComparison.Ordinal);
+            if (isException) line = line.Substring(2);
+            var optionsAt = line.LastIndexOf('$');
+            if (optionsAt > 0) line = line.Substring(0, optionsAt);
+            var regex = Compile(line);
+            if (regex is null) continue;
+            (isException ? exceptions : blocking).Add(regex);
+        }
+        _blocking = blocking;
+        _exceptions = exceptions;
+    }
+
+    public bool ShouldBlock(string url)
+    {
+        if (_exceptions.Any(x => x.IsMatch(url))) return false;
+        return _blocking.Any(x => x.IsMatch(url));
+    }
+
+    private static Regex? Compile(string rule)
+    {
+        if (rule.Length == 0) return null;
+        try
+        {
+            if (rule.Length > 2 && rule[0] == '/' && rule[rule.Length - 1] == '/')
+                return new Regex(rule.Substring(1, rule.Length - 2), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
+
+            var domainAnchor = rule.StartsWith("||", StringComparison.Ordinal);
+            var startAnchor = !domainAnchor && rule.StartsWith("|", StringComparison.Ordinal);
+            var endAnchor = rule.EndsWith("|", StringComparison.Ordinal);
+            if (domainAnchor) rule = rule.Substring(2);
+            else if (startAnchor) rule = rule.Substring(1);
+            if (endAnchor && rule.Length > 0) rule = rule.Substring(0, rule.Length - 1);
+
+            var pattern = Regex.Escape(rule)
+                .Replace("\\*", ".*")
+                .Replace("\\^", "(?:[^A-Za-z0-9_.%-]|$)");
+            if (domainAnchor) pattern = @"^(?:[^:/?#]+:)?//(?:[^/?#]*\.)?" + pattern;
+            else if (startAnchor) pattern = "^" + pattern;
+            if (endAnchor) pattern += "$";
+            return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
+        }
+        catch { return null; }
+    }
 }
 
 public static class ThemeService

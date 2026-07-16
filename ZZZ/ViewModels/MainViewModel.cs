@@ -12,6 +12,7 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly AppServices _services;
     private readonly DispatcherTimer _sleepTimer;
+    private bool _savingSession;
     public ObservableCollection<BrowserTabViewModel> Tabs => _services.Tabs.Items;
     [ObservableProperty] private BrowserTabViewModel? selectedTab;
     [ObservableProperty] private bool isCurrentPageBookmarked;
@@ -27,7 +28,11 @@ public partial class MainViewModel : ObservableObject
         foreach (var url in startupUrls) CreateTab(url);
         if (Tabs.Count == 0) CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current));
         _sleepTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-        _sleepTimer.Tick += (_, _) => SleepIdleTabs();
+        _sleepTimer.Tick += async (_, _) =>
+        {
+            SleepIdleTabs();
+            await SaveSessionSnapshotAsync();
+        };
         _sleepTimer.Start();
     }
 
@@ -113,5 +118,13 @@ public partial class MainViewModel : ObservableObject
         if (minutes <= 0) return;
         var cutoff = DateTime.UtcNow.AddMinutes(-minutes);
         foreach (var tab in Tabs.Where(x => x != SelectedTab && !x.IsPrivate && !x.IsSleeping && x.LastActiveUtc < cutoff)) _services.Browser.Sleep(tab);
+    }
+
+    private async Task SaveSessionSnapshotAsync()
+    {
+        if (_savingSession) return;
+        _savingSession = true;
+        try { await _services.Session.SaveAsync(Tabs.Where(x => !x.IsPrivate).Select(x => x.Url)); }
+        finally { _savingSession = false; }
     }
 }
