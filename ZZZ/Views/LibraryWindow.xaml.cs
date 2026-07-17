@@ -19,7 +19,7 @@ public partial class LibraryWindow : Window
         _main = main;
         Owner = Application.Current.MainWindow;
         RefreshBookmarkGroups();
-        HistoryGrid.ItemsSource = main.Services.History.Items;
+        RefreshHistoryView();
         _scripts = new ObservableCollection<UserScript>(main.Services.UserScripts.Items.Select(Clone));
         ScriptsGrid.ItemsSource = _scripts;
         if (_scripts.Count > 0) ScriptsGrid.SelectedIndex = 0;
@@ -40,12 +40,12 @@ public partial class LibraryWindow : Window
     private async void ExportBookmarks_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "HTML|*.html", FileName = "zzz-bookmarks.html" }; if (d.ShowDialog() == true) await _main.Services.Bookmarks.ExportHtmlAsync(d.FileName); }
     private void OpenHistory_Click(object sender, RoutedEventArgs e) { if (HistoryGrid.SelectedItem is HistoryEntry h) { _main.CreateTab(h.Url); Close(); } }
     private void HistoryGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => OpenHistory_Click(sender, e);
-    private async void RemoveHistory_Click(object sender, RoutedEventArgs e) { if (HistoryGrid.SelectedItem is HistoryEntry h) { await _main.Services.History.RemoveAsync(h); HistoryGrid.Items.Refresh(); } }
+    private async void RemoveHistory_Click(object sender, RoutedEventArgs e) { if (HistoryGrid.SelectedItem is HistoryEntry h) { await _main.Services.History.RemoveAsync(h); RefreshHistoryView(); } }
     private async void ClearHistory_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new ClearDataWindow(new ZZZ.Configuration.ClearDataSelection { History = true, Cache = false, Cookies = false }, true) { Owner = this };
         if (dialog.ShowDialog() != true) return;
-        await _main.Services.History.ClearAsync(); HistoryGrid.Items.Refresh();
+        await _main.Services.History.ClearAsync(); RefreshHistoryView();
     }
     private void NewScript_Click(object sender, RoutedEventArgs e) { var s = new UserScript { Name = "New script", Match = "*", Code = "// Runs after navigation\n" }; _scripts.Add(s); ScriptsGrid.SelectedItem = s; }
     private async void ImportScript_Click(object sender, RoutedEventArgs e)
@@ -67,6 +67,8 @@ public partial class LibraryWindow : Window
     private async void SaveScripts_Click(object sender, RoutedEventArgs e) { ScriptsGrid.CommitEdit(); await _main.Services.UserScripts.SaveAsync(_scripts); await _main.ReapplySettingsAsync(); }
     private void ScriptsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
     private void BookmarkGroupFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshBookmarkView();
+    private void BookmarkSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshBookmarkView();
+    private void HistorySearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshHistoryView();
     private void RefreshBookmarkGroups()
     {
         var selected = BookmarkGroupFilterBox.SelectedItem as string ?? LocalizationService.Text("AllGroups");
@@ -82,12 +84,22 @@ public partial class LibraryWindow : Window
         if (BookmarkGroupFilterBox.SelectedItem is not string selected) return;
         var all = LocalizationService.Text("AllGroups");
         var ungrouped = LocalizationService.Text("Ungrouped");
-        BookmarksGrid.ItemsSource = selected == all
+        var query = BookmarkSearchBox.Text.Trim();
+        var byGroup = selected == all
             ? _main.Services.Bookmarks.Items
             : selected == ungrouped
                 ? _main.Services.Bookmarks.Items.Where(x => string.IsNullOrWhiteSpace(x.Group)).ToArray()
                 : _main.Services.Bookmarks.Items.Where(x => string.Equals(x.Group?.Trim(), selected, StringComparison.CurrentCultureIgnoreCase)).ToArray();
+        BookmarksGrid.ItemsSource = query.Length == 0 ? byGroup : byGroup.Where(x => Matches(query, x.Title, x.Url, x.Group)).ToArray();
     }
+    private void RefreshHistoryView()
+    {
+        var query = HistorySearchBox?.Text.Trim() ?? string.Empty;
+        HistoryGrid.ItemsSource = query.Length == 0
+            ? _main.Services.History.Items
+            : _main.Services.History.Items.Where(x => Matches(query, x.Title, x.Url, x.VisitedUtc.ToString("g"))).ToArray();
+    }
+    private static bool Matches(string query, params string?[] values) => values.Any(x => x is { Length: > 0 } && x.IndexOf(query, StringComparison.CurrentCultureIgnoreCase) >= 0);
     private bool ConfirmSensitive(string operationKey)
     {
         var operation = LocalizationService.Text(operationKey);

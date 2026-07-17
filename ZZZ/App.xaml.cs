@@ -13,6 +13,10 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // The terms dialog is the only window on first launch. Keep WPF from
+        // treating its successful close as "last window closed" before the
+        // actual browser window has been created.
+        ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
         AppPaths.Initialize();
         _singleInstance = new SingleInstanceService();
         if (!_singleInstance.IsPrimary)
@@ -36,13 +40,20 @@ public partial class App : Application
                 return;
             }
             Services.Settings.Current.Legal.AcceptedTermsVersion = TermsWindow.CurrentTermsVersion;
-            await Services.Settings.SaveAsync();
+            try { await Services.Settings.SaveAsync(); }
+            catch
+            {
+                // A read-only or temporarily unavailable data directory must not
+                // turn accepting the terms into an unhandled startup crash. The
+                // in-memory acceptance still lets this run continue safely.
+            }
         }
         var launchUrls = e.Args.Select(SingleInstanceService.NormalizeTarget).Where(x => x is not null).Cast<string>().ToArray();
         var viewModel = new MainViewModel(Services, launchUrls);
         var window = new MainWindow { DataContext = viewModel };
         MainWindow = window;
         window.Show();
+        ShutdownMode = System.Windows.ShutdownMode.OnMainWindowClose;
         _ = Dispatcher.BeginInvoke(new Action(() => _ = Services.EnsureBackgroundInitializedAsync()), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         _singleInstance.StartListening(url => Dispatcher.BeginInvoke(new Action(() =>
         {

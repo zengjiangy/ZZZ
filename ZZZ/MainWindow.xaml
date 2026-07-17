@@ -27,6 +27,7 @@
                     <Viewbox Margin="6"><Path Stroke="White" StrokeThickness="2.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M2,4 L16,4 L4,16 L18,16 M9,10 L18,10 L11,17"/></Viewbox>
                 </Border>
                 <ListBox x:Name="TabsList" Grid.Column="1" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ItemContainerStyle="{StaticResource TabItemContainer}" SelectionChanged="TabsList_SelectionChanged"
+                         AllowDrop="True" PreviewMouseLeftButtonDown="TabsList_PreviewMouseLeftButtonDown" PreviewMouseMove="TabsList_PreviewMouseMove" DragOver="TabsList_DragOver" Drop="TabsList_Drop"
                          Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Hidden" ScrollViewer.VerticalScrollBarVisibility="Disabled">
                     <ListBox.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ListBox.ItemsPanel>
                     <ListBox.ItemTemplate><DataTemplate>

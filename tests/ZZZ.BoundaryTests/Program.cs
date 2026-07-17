@@ -31,6 +31,11 @@ try
     tabServices.Tabs.Close(closedTab);
     Check(closedTab.IsClosed, "closing a tab permanently cancels its browser lifetime");
     Check(!tabServices.Tabs.Items.Contains(closedTab), "closed tabs are removed after cancellation is marked");
+    var firstTab = tabServices.Tabs.Create("https://first.example/");
+    var secondTab = tabServices.Tabs.Create("https://second.example/");
+    var thirdTab = tabServices.Tabs.Create("https://third.example/");
+    tabServices.Tabs.Move(firstTab, 2);
+    Check(tabServices.Tabs.Items.SequenceEqual(new[] { secondTab, thirdTab, firstTab }), "tab service preserves drag-and-drop reorder destinations");
 }
 catch (Exception ex) { Check(false, $"closed-tab lifetime test threw {ex.GetType().FullName}: {ex.Message}"); }
 

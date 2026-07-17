@@ -7,6 +7,7 @@ public interface ITabService
 {
     ObservableCollection<BrowserTabViewModel> Items { get; }
     BrowserTabViewModel Create(string url, bool isPrivate = false);
+    void Move(BrowserTabViewModel tab, int destinationIndex);
     int Close(BrowserTabViewModel tab);
     void CloseOthers(BrowserTabViewModel tab);
     void CloseToRight(BrowserTabViewModel tab);
@@ -20,6 +21,13 @@ public sealed class TabService(AppServices services) : ITabService
         var tab = new BrowserTabViewModel(services, url, isPrivate);
         Items.Add(tab);
         return tab;
+    }
+    public void Move(BrowserTabViewModel tab, int destinationIndex)
+    {
+        var sourceIndex = Items.IndexOf(tab);
+        if (sourceIndex < 0 || Items.Count < 2) return;
+        destinationIndex = Math.Max(0, Math.Min(destinationIndex, Items.Count - 1));
+        if (sourceIndex != destinationIndex) Items.Move(sourceIndex, destinationIndex);
     }
     public int Close(BrowserTabViewModel tab)
     {

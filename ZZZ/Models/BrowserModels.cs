@@ -18,6 +18,12 @@ public sealed class HistoryEntry
     public DateTime VisitedUtc { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class BrowserProcessSnapshot
+{
+    public int ProcessId { get; set; }
+    public string Kind { get; set; } = string.Empty;
+}
+
 public sealed class UserScript
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");

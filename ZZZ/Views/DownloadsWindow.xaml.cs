@@ -7,7 +7,15 @@ using ZZZ.Services;
 namespace ZZZ.Views;
 public partial class DownloadsWindow : Window
 {
-    public DownloadsWindow(IDownloadService downloads) { InitializeComponent(); Owner = Application.Current.MainWindow; Grid.ItemsSource = downloads.Items; }
+    private readonly IDownloadService _downloads;
+    public DownloadsWindow(IDownloadService downloads) { InitializeComponent(); _downloads = downloads; Owner = Application.Current.MainWindow; RefreshView(); }
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshView();
+    private void RefreshView()
+    {
+        var query = SearchBox.Text.Trim();
+        Grid.ItemsSource = query.Length == 0 ? _downloads.Items : _downloads.Items.Where(x => Matches(query, x.FileName, x.SourceUrl, x.ResultPath, x.MimeType, x.Status)).ToArray();
+    }
+    private static bool Matches(string query, params string?[] values) => values.Any(x => x is { Length: > 0 } && x.IndexOf(query, StringComparison.CurrentCultureIgnoreCase) >= 0);
     private void Grid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (ItemsControl.ContainerFromElement(Grid, e.OriginalSource as DependencyObject) is DataGridRow { Item: DownloadItem item }) OpenFile(item);
