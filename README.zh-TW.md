@@ -4,7 +4,7 @@
 
 ZZZ 是一款精簡、開放原始碼的 Windows 瀏覽器，以 .NET Framework 4.8、WPF 與 Microsoft WebView2 建構。它使用系統中的 WebView2 Runtime，不另外綑綁 Chromium，也能將瀏覽器資料存放於執行檔旁，方便隨身使用。
 
-目前版本：**2.0.1**
+目前版本：**2.0.5**
 
 ## 下載與系統需求
 
@@ -12,9 +12,9 @@ ZZZ 是一款精簡、開放原始碼的 Windows 瀏覽器，以 .NET Framework 
 
 | 檔案 | 適用平台 |
 |---|---|
-| `ZZZ-v2.0.1-win-x64.exe` | Windows x64 原生版本 |
-| `ZZZ-v2.0.1-win-x86.exe` | Windows 10 x86 32 位元相容版；亦可在 Windows 10 on Arm 透過 x86 模擬執行 |
-| `ZZZ-v2.0.1-win-arm64.exe` | Windows ARM64 原生版本 |
+| `ZZZ-v2.0.5-win-x64.exe` | Windows x64 原生版本 |
+| `ZZZ-v2.0.5-win-x86.exe` | Windows 10 x86 32 位元相容版；亦可在 Windows 10 on Arm 透過 x86 模擬執行 |
+| `ZZZ-v2.0.5-win-arm64.exe` | Windows ARM64 原生版本 |
 
 下載後即可執行，無須安裝。系統需要 Windows 10 或 Windows 11、.NET Framework 4.8，以及 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。
 

@@ -17,6 +17,8 @@ public partial class MainWindow : Window
     private BrowserTabViewModel? _splitTab;
     private BrowserTabViewModel? _findTab;
     private CancellationTokenSource? _addressSuggestionCancellation;
+    private Point _tabDragStart;
+    private BrowserTabViewModel? _draggedTab;
     private bool _isFullscreen;
     private bool _splitVertical;
     private bool _splitOrientationManuallySet;
@@ -68,6 +70,58 @@ public partial class MainWindow : Window
         vm.SelectedTab = tab;
         tab.Activate();
         ShowSelectedTab(tab);
+    }
+
+    private void TabsList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _tabDragStart = e.GetPosition(TabsList);
+        _draggedTab = FindTabContainer(e.OriginalSource as DependencyObject)?.DataContext as BrowserTabViewModel;
+    }
+
+    private void TabsList_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _draggedTab is null) return;
+        var current = e.GetPosition(TabsList);
+        if (Math.Abs(current.X - _tabDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(current.Y - _tabDragStart.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+        var tab = _draggedTab;
+        _draggedTab = null;
+        DragDrop.DoDragDrop(TabsList, new DataObject(typeof(BrowserTabViewModel), tab), DragDropEffects.Move);
+    }
+
+    private void TabsList_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(typeof(BrowserTabViewModel)) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void TabsList_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(typeof(BrowserTabViewModel)) is not BrowserTabViewModel tab) return;
+        var insertionIndex = ViewModel.Tabs.Count;
+        if (FindTabContainer(e.OriginalSource as DependencyObject) is { } targetContainer && targetContainer.DataContext is BrowserTabViewModel target)
+        {
+            insertionIndex = ViewModel.Tabs.IndexOf(target);
+            if (e.GetPosition(targetContainer).X > targetContainer.ActualWidth / 2) insertionIndex++;
+        }
+        var sourceIndex = ViewModel.Tabs.IndexOf(tab);
+        if (sourceIndex < 0) return;
+        if (sourceIndex < insertionIndex) insertionIndex--;
+        ViewModel.Services.Tabs.Move(tab, insertionIndex);
+        ViewModel.SelectedTab = tab;
+        e.Handled = true;
+    }
+
+    private ListBoxItem? FindTabContainer(DependencyObject? source)
+    {
+        while (source is not null && !ReferenceEquals(source, TabsList))
+        {
+            if (source is ListBoxItem item && ItemsControl.ItemsControlFromItemContainer(item) == TabsList) return item;
+            source = source is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
+                ? System.Windows.Media.VisualTreeHelper.GetParent(source)
+                : LogicalTreeHelper.GetParent(source);
+        }
+        return null;
     }
 
     private void AddressBox_KeyDown(object sender, KeyEventArgs e)
@@ -213,6 +267,7 @@ public partial class MainWindow : Window
         else if (e.Key == Key.F12) { OpenDeveloperTools(); e.Handled = true; }
         else if (e.Key == Key.F9) { ViewModel.SelectedTab?.ToggleReaderModeCommand.Execute(null); e.Handled = true; }
         else if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; }
+        else if (shift && e.Key == Key.Escape) { new TaskManagerWindow(ViewModel).Show(); e.Handled = true; }
     }
 
     private void MenuButton_Click(object sender, RoutedEventArgs e)
@@ -227,6 +282,7 @@ public partial class MainWindow : Window
             new LibraryWindow(ViewModel).ShowDialog();
         }));
         menu.Items.Add(Item(LocalizationService.Text("Downloads"), (_, _) => new DownloadsWindow(ViewModel.Services.Downloads).Show()));
+        menu.Items.Add(Item(LocalizationService.Text("BrowserTaskManager"), (_, _) => new TaskManagerWindow(ViewModel).Show(), "Shift+Esc"));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item(LocalizationService.Text("SaveAsPdf"), async (_, _) => await (ViewModel.SelectedTab?.SaveAsPdfAsync() ?? Task.CompletedTask)));
         menu.Items.Add(Item(LocalizationService.Text("SaveAsMht"), async (_, _) => await (ViewModel.SelectedTab?.SaveAsMhtAsync() ?? Task.CompletedTask)));
@@ -442,6 +498,11 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             Dispatcher.BeginInvoke(new Action(CloseSplit));
+        }
+        else if (e.Shortcut == BrowserShortcut.TaskManager)
+        {
+            e.Handled = true;
+            Dispatcher.BeginInvoke(new Action(() => new TaskManagerWindow(ViewModel).Show()));
         }
     }
 

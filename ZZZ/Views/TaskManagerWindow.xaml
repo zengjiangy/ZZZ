@@ -1,0 +1,17 @@
+<Window x:Class="ZZZ.Views.TaskManagerWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource AppWindowStyle}" Title="{DynamicResource BrowserTaskManager}" Height="570" Width="900" MinHeight="390" MinWidth="680" WindowStartupLocation="CenterOwner">
+    <Grid Margin="18" Background="{DynamicResource WindowBrush}">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Margin="4,0,0,12"><TextBlock Text="{DynamicResource BrowserTaskManager}" FontSize="22" FontWeight="SemiBold"/><TextBlock Text="{DynamicResource TaskManagerHint}" Foreground="{DynamicResource MutedBrush}" Margin="0,4,0,0"/></StackPanel>
+        <DockPanel Grid.Row="1" Margin="0,0,0,12"><TextBlock Text="{DynamicResource Search}" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBox x:Name="SearchBox" Padding="12,8" ToolTip="{DynamicResource SearchPlaceholder}" TextChanged="SearchBox_TextChanged"/></DockPanel>
+        <DataGrid x:Name="Grid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" RowHeaderWidth="0" SelectionChanged="Grid_SelectionChanged">
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="{DynamicResource Task}" Width="3*"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource MutedBrush}" FontSize="10" TextTrimming="CharacterEllipsis"/></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                <DataGridTextColumn Header="{DynamicResource Memory}" Binding="{Binding MemoryText}" Width="110"/>
+                <DataGridTextColumn Header="{DynamicResource Cpu}" Binding="{Binding CpuText}" Width="90"/>
+                <DataGridTextColumn Header="{DynamicResource ProcessId}" Binding="{Binding ProcessIdText}" Width="105"/>
+            </DataGrid.Columns>
+        </DataGrid>
+        <DockPanel Grid.Row="3" Margin="0,12,0,0"><TextBlock x:Name="SummaryText" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}"/><Button x:Name="EndTaskButton" Content="{DynamicResource EndTask}" Click="EndTask_Click" IsEnabled="False" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" DockPanel.Dock="Right"/></DockPanel>
+    </Grid>
+</Window>

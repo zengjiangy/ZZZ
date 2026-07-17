@@ -109,7 +109,7 @@ public interface IBrowserLifecycleService : IDisposable
     void Close(BrowserTabViewModel tab);
 }
 
-public enum BrowserShortcut { Find, CloseSplit }
+public enum BrowserShortcut { Find, CloseSplit, TaskManager }
 
 public sealed class BrowserShortcutEventArgs(BrowserTabViewModel tab, BrowserShortcut shortcut) : EventArgs
 {
@@ -257,6 +257,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         BrowserShortcut? shortcut = ctrl && e.Key == Key.F ? BrowserShortcut.Find
             : ctrl && shift && e.Key == Key.W ? BrowserShortcut.CloseSplit
+            : shift && e.Key == Key.Escape ? BrowserShortcut.TaskManager
             : null;
         if (shortcut is null) return;
         var request = new BrowserShortcutEventArgs(tab, shortcut.Value);
@@ -711,6 +712,21 @@ style.textContent='html{{filter:grayscale(1)!important}}';
             if (!pair.Value.TryGetTarget(out var view) || view.CoreWebView2 is not { } core) continue;
             try { core.MemoryUsageTargetLevel = ReferenceEquals(pair.Key, activeTab) ? CoreWebView2MemoryUsageTargetLevel.Normal : CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
         }
+    }
+
+    public IReadOnlyList<BrowserProcessSnapshot> GetProcessSnapshot()
+    {
+        var processes = new Dictionary<int, BrowserProcessSnapshot>();
+        foreach (var environment in _tabEnvironments.Values.Distinct())
+        {
+            try
+            {
+                foreach (var info in environment.GetProcessInfos())
+                    processes[info.ProcessId] = new BrowserProcessSnapshot { ProcessId = info.ProcessId, Kind = info.Kind.ToString() };
+            }
+            catch { }
+        }
+        return processes.Values.OrderBy(x => x.Kind).ThenBy(x => x.ProcessId).ToArray();
     }
 
     public void BeginShutdown()

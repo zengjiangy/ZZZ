@@ -621,7 +621,7 @@ public sealed class UserScriptService : IUserScriptService
             Architecture.Arm64 => "Windows NT 10.0; ARM64",
             _ => "Windows NT 10.0; Win64; x64"
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/2.0.1");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/2.0.5");
         return client;
     }
 }
