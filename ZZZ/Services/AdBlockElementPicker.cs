@@ -207,9 +207,14 @@ public sealed class AdBlockElementPickerSession : IDisposable
         EventHandler<CoreWebView2NavigationStartingEventArgs> navigation = (_, e) => registration.PageUrl = e.Uri ?? string.Empty;
         EventHandler<CoreWebView2DOMContentLoadedEventArgs> loaded = async (_, _) => await ApplyFrameCosmeticRulesAsync(registration).ConfigureAwait(true);
         EventHandler<CoreWebView2FrameCreatedEventArgs> child = (_, e) => AttachFrame(e.Frame);
-        EventHandler<object> destroyed = (_, _) => DetachFrame(registration);
+        EventHandler<object> destroyed = (_, _) => OnFrameDestroyed(registration);
         registration.Detach = () =>
         {
+            // A destroyed CoreWebView2Frame no longer accepts event-subscription
+            // changes. In particular, removing FrameCreated from inside the
+            // Destroyed callback makes WebView2 150 fail-fast in
+            // UpdateHasFrameCreatedEventHandlers.
+            if (registration.IsDestroyed) return;
             try { frame.WebMessageReceived -= message; } catch { }
             try { frame.NavigationStarting -= navigation; } catch { }
             try { frame.DOMContentLoaded -= loaded; } catch { }
@@ -224,10 +229,13 @@ public sealed class AdBlockElementPickerSession : IDisposable
         frame.Destroyed += destroyed;
     }
 
-    private void DetachFrame(FrameRegistration registration)
+    private void OnFrameDestroyed(FrameRegistration registration)
     {
+        // Only release our managed references here. Unsubscribing another frame
+        // event while WebView2 is dispatching Destroyed is re-entrant and can
+        // terminate the host process with 0x80000003.
+        registration.IsDestroyed = true;
         _frames.Remove(registration.Id);
-        registration.Detach();
         if (ReferenceEquals(_lastCaptureFrame, registration.Frame)) _lastCaptureFrame = null;
     }
 
@@ -337,6 +345,7 @@ public sealed class AdBlockElementPickerSession : IDisposable
         public uint Id { get; } = frame.FrameId;
         public CoreWebView2Frame Frame { get; } = frame;
         public string PageUrl { get; set; } = string.Empty;
+        public bool IsDestroyed { get; set; }
         public Action Detach { get; set; } = () => { };
     }
 }
