@@ -353,7 +353,9 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     {
         var cfg = _settings.Current;
         var url = e.Request.Uri;
-        if (cfg.Advanced.EnableAdBlock && _adBlock.ShouldBlock(new AdBlockRequestContext
+        if (cfg.Advanced.EnableAdBlock &&
+            !MediaPlaybackPolicy.MustAllow(e.ResourceContext, url, tab.Url) &&
+            _adBlock.ShouldBlock(new AdBlockRequestContext
         {
             Url = url,
             DocumentUrl = tab.Url,
