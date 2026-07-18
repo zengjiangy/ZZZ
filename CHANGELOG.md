@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.7 - 2026-07-18
+
+- 修复启用广告拦截时，YouTube `googlevideo.com/videoplayback` 媒体请求被误拦截导致视频无法播放的问题。
+- 外部播放器菜单现在可直接打开当前网页（适用于 YouTube 等分离音视频的站点），同时保留已检测媒体 URL 作为备用入口。
+
 ## 2.0.6 - 2026-07-17
 
 - 修复动态子框架销毁时，广告拦截元素选择器在 WebView2 `Destroyed` 回调内重入解绑事件，导致 `EmbeddedBrowserWebView.dll` 触发 `0x80000003` 并终止整个浏览器的问题。

@@ -167,6 +167,10 @@ Check(!resourceRules.ShouldBlock(Request("ftp://assets.example.com/ad.js", "http
 Check(AdBlockWebView2Mapper.FromWebView2(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Fetch) == AdBlockResourceType.XmlHttpRequest, "WebView2 fetch resource mapping");
 Check(AdBlockWebView2Mapper.FromWebView2(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Websocket) == AdBlockResourceType.WebSocket, "WebView2 websocket resource mapping");
 Check(AdBlockWebView2Mapper.FromWebView2(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Document, true) == AdBlockResourceType.Subdocument, "WebView2 subdocument resource mapping");
+Check(MediaPlaybackPolicy.MustAllow(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Media, "https://cdn.example/video", "https://site.example/"), "media responses bypass filter-list false positives");
+Check(MediaPlaybackPolicy.MustAllow(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Fetch, "https://rr4---sn.example.googlevideo.com/videoplayback?range=0-1", "https://www.youtube.com/watch?v=test"), "YouTube MSE playback relationship bypasses filter-list false positives");
+Check(!MediaPlaybackPolicy.MustAllow(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Fetch, "https://rr4---sn.example.googlevideo.com/videoplayback?range=0-1", "https://unrelated.example/"), "googlevideo bypass is scoped to YouTube documents");
+Check(ExternalPlayerLauncher.Quote("https://example.com/watch?v=1&list=2") == "\"https://example.com/watch?v=1&list=2\"", "external player URL is passed as one argument");
 var encodedCssScript = AdBlockElementPicker.BuildApplyCssScript("</style><script>window.bad=true</script>");
 Check(!encodedCssScript.Contains("</style>") && !encodedCssScript.Contains("<script>"), "cosmetic CSS is JSON-encoded before script injection");
 var pickerBootstrap = (string?)typeof(AdBlockElementPicker).GetField("Bootstrap", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)?.GetRawConstantValue() ?? string.Empty;

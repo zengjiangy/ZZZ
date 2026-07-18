@@ -363,14 +363,26 @@ public partial class MainWindow : Window
     private void MediaButton_Click(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu { PlacementTarget = MediaButton };
-        foreach (var media in ViewModel.SelectedTab?.MediaResources ?? [])
+        var tab = ViewModel.SelectedTab;
+        var playerPath = ViewModel.Services.Settings.Current.Advanced.ExternalPlayerPath;
+        if (tab is not null && !string.IsNullOrWhiteSpace(playerPath) &&
+            Uri.TryCreate(tab.Url, UriKind.Absolute, out var pageUri) &&
+            (pageUri.Scheme == Uri.UriSchemeHttp || pageUri.Scheme == Uri.UriSchemeHttps))
+        {
+            var openPage = new MenuItem { Header = LocalizationService.Text("OpenPageExternal") };
+            openPage.Click += (_, _) => OpenExternalPlayer(playerPath, tab.Url);
+            menu.Items.Add(openPage);
+            if (tab.MediaResources.Count > 0) menu.Items.Add(new Separator());
+        }
+
+        foreach (var media in tab?.MediaResources ?? [])
         {
             var item = new MenuItem { Header = media.ToString(), ToolTip = media.Url };
             item.Click += (_, _) => Clipboard.SetText(media.Url);
-            if (!string.IsNullOrWhiteSpace(ViewModel.Services.Settings.Current.Advanced.ExternalPlayerPath))
+            if (!string.IsNullOrWhiteSpace(playerPath))
             {
                 var open = new MenuItem { Header = LocalizationService.Text("OpenExternal") };
-                open.Click += (_, _) => Process.Start(new ProcessStartInfo(ViewModel.Services.Settings.Current.Advanced.ExternalPlayerPath, $"\"{media.Url}\"") { UseShellExecute = true });
+                open.Click += (_, _) => OpenExternalPlayer(playerPath, media.Url);
                 item.Items.Add(open);
             }
             var copy = new MenuItem { Header = LocalizationService.Text("CopyUrl") };
@@ -378,7 +390,19 @@ public partial class MainWindow : Window
             item.Items.Add(copy);
             menu.Items.Add(item);
         }
+        if (menu.Items.Count == 0)
+            menu.Items.Add(new MenuItem { Header = LocalizationService.Text("NoMediaDetected"), IsEnabled = false });
         menu.IsOpen = true;
+    }
+
+    private void OpenExternalPlayer(string playerPath, string url)
+    {
+        if (ExternalPlayerLauncher.TryOpen(playerPath, url, out var error)) return;
+        MessageBox.Show(this,
+            string.Format(LocalizationService.Text("ExternalPlayerFailed"), error),
+            LocalizationService.Text("ExternalPlayer"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
     }
 
     private async void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
