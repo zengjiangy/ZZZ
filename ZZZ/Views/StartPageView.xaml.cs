@@ -238,6 +238,7 @@ public partial class StartPageView : UserControl
                 Title = x.Title,
                 Url = x.Url,
                 DisplayUrl = Uri.TryCreate(x.Url, UriKind.Absolute, out var uri) ? uri.Host : x.Url,
+                Favicon = App.Services.Favicons.GetCached(x.Url),
                 TileWidth = width,
                 TileHeight = settings.BookmarkStyle == BookmarkTileStyle.Card ? 72 : settings.BookmarkStyle == BookmarkTileStyle.Compact ? 38 : 48,
                 TilePadding = settings.BookmarkStyle == BookmarkTileStyle.Compact ? new Thickness(9, 4, 9, 4) : new Thickness(14, 8, 14, 8),
@@ -267,6 +268,7 @@ public partial class StartPageView : UserControl
         public string Title { get; set; } = string.Empty;
         public string Url { get; set; } = string.Empty;
         public string DisplayUrl { get; set; } = string.Empty;
+        public ImageSource? Favicon { get; set; }
         public double TileWidth { get; set; }
         public double TileHeight { get; set; }
         public Thickness TilePadding { get; set; }

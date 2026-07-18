@@ -6,7 +6,7 @@ Offizielle Website: [zzz.campusphere.ltd](https://zzz.campusphere.ltd/)
 
 ZZZ ist ein schlanker, quelloffener Browser für Windows, der auf .NET Framework 4.8, WPF und Microsoft WebView2 basiert. Er verwendet die auf dem System installierte WebView2 Runtime, statt Chromium mitzuliefern. Für den portablen Einsatz können die Browserdaten neben der Programmdatei gespeichert werden.
 
-Aktuelle Version: **2.1.0**
+Aktuelle Version: **2.1.5**
 
 ## Download und Voraussetzungen
 
@@ -14,15 +14,15 @@ Die aktuelle Version steht unter [GitHub Releases](https://github.com/zengjiangy
 
 | Datei | Plattform |
 |---|---|
-| `ZZZ-v2.1.0-win-x64.exe` | Native Windows-x64-Version |
-| `ZZZ-v2.1.0-win-x86.exe` | 32-Bit-Version für Windows 10 x86 und Windows 10 on Arm per x86-Emulation |
-| `ZZZ-v2.1.0-win-arm64.exe` | Native Windows-ARM64-Version |
+| `ZZZ-v2.1.5-win-x64.exe` | Native Windows-x64-Version |
+| `ZZZ-v2.1.5-win-x86.exe` | 32-Bit-Version für Windows 10 x86 und Windows 10 on Arm per x86-Emulation |
+| `ZZZ-v2.1.5-win-arm64.exe` | Native Windows-ARM64-Version |
 
 Eine Installation ist nicht erforderlich. Benötigt werden Windows 10 oder Windows 11, .NET Framework 4.8 und die [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
 
 ## Wichtigste Funktionen
 
-- Mehrsprachige Oberfläche, Tabs, Wiederherstellung kürzlich geschlossener Seiten und horizontale oder vertikale geteilte Ansicht
+- Horizontale oder einklappbare vertikale Tabs mit Website-Symbolen und animierter Sortierung sowie persistente Arbeitsbereiche im Edge-Stil
 - Kombinierte Adress- und Suchleiste mit Treffern aus dem Verlauf und Live-Suchvorschlägen
 - Gruppierbare und bearbeitbare Lesezeichen sowie HTML-Import und -Export
 - Schlanke native Startseite mit frei wählbarer Farbe, Bild- oder GIF-Hintergrund

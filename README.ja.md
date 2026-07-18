@@ -6,7 +6,7 @@
 
 ZZZ は、.NET Framework 4.8、WPF、Microsoft WebView2 で構築された、Windows 向けの軽量なオープンソースブラウザーです。Chromium を同梱せず、システムにインストールされた WebView2 Runtime を利用します。ブラウザーデータを実行ファイルと同じ場所に保存するポータブル運用にも対応しています。
 
-現在のバージョン：**2.1.0**
+現在のバージョン：**2.1.5**
 
 ## ダウンロードと動作環境
 
@@ -14,15 +14,15 @@ ZZZ は、.NET Framework 4.8、WPF、Microsoft WebView2 で構築された、Win
 
 | ファイル | 対応プラットフォーム |
 |---|---|
-| `ZZZ-v2.1.0-win-x64.exe` | Windows x64 ネイティブ版 |
-| `ZZZ-v2.1.0-win-x86.exe` | Windows 10 x86 向け32ビット互換版（Windows 10 on Armではx86エミュレーション） |
-| `ZZZ-v2.1.0-win-arm64.exe` | Windows ARM64 ネイティブ版 |
+| `ZZZ-v2.1.5-win-x64.exe` | Windows x64 ネイティブ版 |
+| `ZZZ-v2.1.5-win-x86.exe` | Windows 10 x86 向け32ビット互換版（Windows 10 on Armではx86エミュレーション） |
+| `ZZZ-v2.1.5-win-arm64.exe` | Windows ARM64 ネイティブ版 |
 
 インストールは不要です。Windows 10 または Windows 11、.NET Framework 4.8、および [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) が必要です。
 
 ## 主な機能
 
-- 多言語 UI、複数タブ、最近閉じたページの復元、上下・左右の分割表示
+- サイトアイコンとアニメーション並べ替えに対応した横型／折りたたみ式縦型タブ、および Edge 風の永続ワークスペース
 - 履歴候補と検索候補に対応したアドレス／検索統合バー
 - グループ分け、編集、HTML のインポート／エクスポートに対応したブックマーク
 - 単色、画像、GIF の背景を選べる軽量なネイティブスタートページ

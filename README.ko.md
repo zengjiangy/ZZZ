@@ -6,7 +6,7 @@
 
 ZZZ는 .NET Framework 4.8, WPF 및 Microsoft WebView2로 만든 가벼운 오픈 소스 Windows 브라우저입니다. Chromium을 별도로 포함하지 않고 시스템에 설치된 WebView2 Runtime을 사용합니다. 휴대용으로 사용할 때는 브라우저 데이터를 실행 파일과 같은 위치에 보관할 수 있습니다.
 
-현재 버전: **2.1.0**
+현재 버전: **2.1.5**
 
 ## 다운로드 및 시스템 요구 사항
 
@@ -14,15 +14,15 @@ ZZZ는 .NET Framework 4.8, WPF 및 Microsoft WebView2로 만든 가벼운 오픈
 
 | 파일 | 플랫폼 |
 |---|---|
-| `ZZZ-v2.1.0-win-x64.exe` | Windows x64 네이티브 버전 |
-| `ZZZ-v2.1.0-win-x86.exe` | Windows 10 x86 32비트 호환 버전(Windows 10 on Arm에서는 x86 에뮬레이션) |
-| `ZZZ-v2.1.0-win-arm64.exe` | Windows ARM64 네이티브 버전 |
+| `ZZZ-v2.1.5-win-x64.exe` | Windows x64 네이티브 버전 |
+| `ZZZ-v2.1.5-win-x86.exe` | Windows 10 x86 32비트 호환 버전(Windows 10 on Arm에서는 x86 에뮬레이션) |
+| `ZZZ-v2.1.5-win-arm64.exe` | Windows ARM64 네이티브 버전 |
 
 설치 과정은 필요하지 않습니다. Windows 10 또는 Windows 11, .NET Framework 4.8 및 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)이 필요합니다.
 
 ## 주요 기능
 
-- 다국어 인터페이스, 탭 탐색, 최근에 닫은 페이지 복원, 가로·세로 분할 보기
+- 사이트 아이콘과 애니메이션 정렬을 지원하는 가로/접이식 세로 탭 및 Edge 스타일의 영구 작업 공간
 - 방문 기록 일치 항목과 실시간 검색 제안을 제공하는 통합 주소·검색 표시줄
 - 그룹 및 이름 편집, HTML 가져오기·내보내기를 지원하는 북마크
 - 단색, 이미지 또는 GIF 배경을 선택할 수 있는 가벼운 네이티브 시작 페이지

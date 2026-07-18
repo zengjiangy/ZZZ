@@ -36,6 +36,7 @@ public partial class App : Application
         Services = new AppServices();
         await Services.InitializeAsync();
         LocalizationService.Apply(Services.Settings.Current.Ui.Language);
+        Services.Workspaces.ApplyLocalizedDefaults();
         ThemeService.Apply(Services.Settings.Current.Appearance, Services.Settings.Current.StartPage, Services.Settings.Current.Ui.GrayscaleMode);
         if (!string.Equals(Services.Settings.Current.Legal.AcceptedTermsVersion, TermsWindow.CurrentTermsVersion, StringComparison.Ordinal))
         {

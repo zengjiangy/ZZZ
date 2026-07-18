@@ -6,7 +6,7 @@ Official website: [zzz.campusphere.ltd](https://zzz.campusphere.ltd/)
 
 ZZZ is a lightweight, open-source browser for Windows, built with .NET Framework 4.8, WPF, and Microsoft WebView2. It uses the system WebView2 Runtime instead of bundling Chromium and can keep all browser data beside the executable for portable use.
 
-Current version: **2.1.0**
+Current version: **2.1.5**
 
 ## Download
 
@@ -14,9 +14,9 @@ Download the latest build from [GitHub Releases](https://github.com/zengjiangy/Z
 
 | File | Platform |
 |---|---|
-| `ZZZ-v2.1.0-win-x64.exe` | Native Windows x64 build |
-| `ZZZ-v2.1.0-win-x86.exe` | 32-bit Windows 10 x86 compatibility build; also runs under x86 emulation on Windows 10 on Arm |
-| `ZZZ-v2.1.0-win-arm64.exe` | Native Windows ARM64 build |
+| `ZZZ-v2.1.5-win-x64.exe` | Native Windows x64 build |
+| `ZZZ-v2.1.5-win-x86.exe` | 32-bit Windows 10 x86 compatibility build; also runs under x86 emulation on Windows 10 on Arm |
+| `ZZZ-v2.1.5-win-arm64.exe` | Native Windows ARM64 build |
 
 No installer is required. Windows 10 or 11, .NET Framework 4.8, and the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) are required.
 
@@ -25,10 +25,11 @@ The WinGet community submission is under review in [microsoft/winget-pkgs#402023
 ## Highlights
 
 - Interface language selection for Simplified Chinese, Traditional Chinese, English, Japanese, Korean, Portuguese, Spanish, Russian, French, and German
-- Tabs, session restore, private tabs, and horizontal or vertical split view
+- Horizontal or collapsible vertical tabs with favicons, live drag positioning, and smooth reorder motion
+- Edge-style workspaces with persistent tab groups, create/rename/delete controls, switching, and move-to-workspace actions
 - Event-driven, atomic non-private session journaling with an option to disable all recording
 - Combined address and search box with history matches and live suggestions
-- Grouped bookmarks, bookmark HTML import/export, and a customizable native start page
+- Grouped bookmarks, bookmark HTML import/export, and a customizable native start page, with cached site icons across tabs, bookmarks, and history
 - Per-pane zoom, in-page find, printing, full-page PDF, and MHT archive export
 - F9 reading mode, application-wide grayscale mode, editable bookmark names, and a privacy-conscious About page
 - A concise first-run terms prompt shown before any web process starts; acceptance is stored only in local settings
@@ -42,7 +43,7 @@ The WinGet community submission is under review in [microsoft/winget-pkgs#402023
 - Manual, daily, or weekly filter updates; ABP network and cosmetic filtering; and a page context-menu command for blocking an ad element
 - WebView2 process recovery, runtime update notices, and event-driven atomic snapshots of non-private sessions
 - Local AppData, portable, or custom browser-data storage
-- DPAPI encryption for history and bookmarks, with automatic migration and best-effort scrubbing of the legacy plaintext JSON files
+- DPAPI encryption for history, bookmarks, and workspace page lists, with automatic migration and best-effort scrubbing of the legacy plaintext history/bookmark files
 - PowerShell-independent private-profile cleanup and an orderly WebView2 shutdown boundary for removable drives
 - Complete UI resources for Simplified Chinese, Traditional Chinese, English, Japanese, Korean, Portuguese, Spanish, Russian, French, and German
 

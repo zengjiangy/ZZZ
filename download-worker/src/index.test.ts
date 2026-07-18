@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { handleRequest, type Env } from "./index";
 
-const KEY = "releases/v2.1.0/ZZZ-v2.1.0-win-x64.exe";
+const KEY = "releases/v2.1.5/ZZZ-v2.1.5-win-x64.exe";
 const DATA = new TextEncoder().encode("0123456789");
 
 function metadata(key: string, data: Uint8Array): R2Object {
@@ -73,7 +73,7 @@ describe("download worker", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
-    expect(await response.json()).toMatchObject({ status: "ok", latest: "v2.1.0" });
+    expect(await response.json()).toMatchObject({ status: "ok", latest: "v2.1.5" });
   });
 
   it("returns a bodyless HEAD response with GET-equivalent metadata", async () => {
@@ -91,7 +91,7 @@ describe("download worker", () => {
     expect(bucket.getCalls).toEqual([]);
   });
 
-  it.each(["x64", "x86", "arm64"])("redirects /latest/%s to v2.1.0", async (architecture) => {
+  it.each(["x64", "x86", "arm64"])("redirects /latest/%s to v2.1.5", async (architecture) => {
     const { env } = testEnv();
     const response = await handleRequest(
       new Request(`https://download.zzz.campusphere.ltd/latest/${architecture}`),
@@ -99,7 +99,7 @@ describe("download worker", () => {
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toMatch(/^\/releases\/v2\.1\.0\/ZZZ-v2\.1\.0-win-/);
+    expect(response.headers.get("location")).toMatch(/^\/releases\/v2\.1\.5\/ZZZ-v2\.1\.5-win-/);
   });
 
   it("streams a release asset with immutable attachment headers", async () => {
@@ -147,7 +147,7 @@ describe("download worker", () => {
   it("rejects unsafe paths before accessing R2", async () => {
     const { env, bucket } = testEnv();
     const response = await handleRequest(
-      new Request("https://download.zzz.campusphere.ltd/releases/v2.1.0/%252e%252e%252fsecret.exe"),
+      new Request("https://download.zzz.campusphere.ltd/releases/v2.1.5/%252e%252e%252fsecret.exe"),
       env,
     );
 
@@ -159,7 +159,7 @@ describe("download worker", () => {
   it("returns 404 for a missing release object", async () => {
     const { env } = testEnv();
     const response = await handleRequest(
-      new Request("https://download.zzz.campusphere.ltd/releases/v2.1.0/missing.exe"),
+      new Request("https://download.zzz.campusphere.ltd/releases/v2.1.5/missing.exe"),
       env,
     );
 

@@ -90,11 +90,13 @@ public partial class LibraryWindow : Window
             : selected == ungrouped
                 ? _main.Services.Bookmarks.Items.Where(x => string.IsNullOrWhiteSpace(x.Group)).ToArray()
                 : _main.Services.Bookmarks.Items.Where(x => string.Equals(x.Group?.Trim(), selected, StringComparison.CurrentCultureIgnoreCase)).ToArray();
+        foreach (var bookmark in byGroup) bookmark.Favicon ??= _main.Services.Favicons.GetCached(bookmark.Url);
         BookmarksGrid.ItemsSource = query.Length == 0 ? byGroup : byGroup.Where(x => Matches(query, x.Title, x.Url, x.Group)).ToArray();
     }
     private void RefreshHistoryView()
     {
         var query = HistorySearchBox?.Text.Trim() ?? string.Empty;
+        foreach (var entry in _main.Services.History.Items) entry.Favicon ??= _main.Services.Favicons.GetCached(entry.Url);
         HistoryGrid.ItemsSource = query.Length == 0
             ? _main.Services.History.Items
             : _main.Services.History.Items.Where(x => Matches(query, x.Title, x.Url, x.VisitedUtc.ToString("g"))).ToArray();

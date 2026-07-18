@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -29,6 +30,8 @@ public static class AppPaths
     public static string UserScriptValues => Path.Combine(Root, "userscript-values.json");
     public static string BlockingRules => Path.Combine(Root, "blocking-rules.txt");
     public static string Session => Path.Combine(Root, "session.json");
+    public static string Workspaces => Path.Combine(Root, "workspaces.dat");
+    public static string Favicons => Path.Combine(Root, "Favicons");
     public static string WebViewData => Path.Combine(Root, "WebView2");
     public static string PrivateWebViewRoot => Path.Combine(Root, "Private");
     public static string LegacyPrivateWebViewRoot => Path.Combine(Path.GetTempPath(), "ZZZ", "Private");
@@ -311,6 +314,143 @@ public sealed class SettingsService : ISettingsService
     {
         Current = await JsonFiles.LoadAsync(path, () => Current);
         await SaveAsync();
+    }
+}
+
+public sealed class WorkspaceService
+{
+    private static readonly string[] Palette = ["#6557C8", "#2F7ED8", "#1B9A75", "#D9822B", "#D64F70", "#7A5AF8", "#148A9C", "#A66B1F"];
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
+    public ObservableCollection<WorkspaceDefinition> Items { get; } = [];
+    public string ActiveWorkspaceId { get; private set; } = string.Empty;
+
+    public WorkspaceDefinition Active => Find(ActiveWorkspaceId) ?? Items.First();
+
+    public void ApplyLocalizedDefaults()
+    {
+        var workspace = Find("default");
+        if (workspace is not null && string.Equals(workspace.Name, "DefaultWorkspace", StringComparison.Ordinal))
+            workspace.Name = LocalizationService.Text("DefaultWorkspace");
+    }
+
+    public async Task LoadAsync()
+    {
+        var store = await ProtectedJsonFiles.LoadAsync(AppPaths.Workspaces, "workspaces", () => new WorkspaceStore());
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var workspace in store.Items.Take(12))
+        {
+            workspace.Id = NormalizeId(workspace.Id, seen);
+            workspace.Name = NormalizeName(workspace.Name, Items.Count + 1);
+            workspace.Color = NormalizeColor(workspace.Color, Items.Count);
+            workspace.SavedUrls = NormalizeUrls(workspace.SavedUrls).Take(50).ToList();
+            Items.Add(workspace);
+        }
+        if (Items.Count == 0) Items.Add(CreateDefault());
+        ActiveWorkspaceId = Find(store.ActiveWorkspaceId)?.Id ?? Items[0].Id;
+    }
+
+    public WorkspaceDefinition Create(string? requestedName)
+    {
+        if (Items.Count >= 12) return Active;
+        var workspace = new WorkspaceDefinition
+        {
+            Name = NormalizeName(requestedName, Items.Count + 1),
+            Color = Palette[Items.Count % Palette.Length]
+        };
+        Items.Add(workspace);
+        ActiveWorkspaceId = workspace.Id;
+        return workspace;
+    }
+
+    public bool Remove(WorkspaceDefinition workspace)
+    {
+        if (Items.Count <= 1 || !Items.Remove(workspace)) return false;
+        if (string.Equals(ActiveWorkspaceId, workspace.Id, StringComparison.OrdinalIgnoreCase)) ActiveWorkspaceId = Items[0].Id;
+        return true;
+    }
+
+    public WorkspaceDefinition? Find(string? id) => Items.FirstOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    public void SetActive(string id)
+    {
+        if (Find(id) is not null) ActiveWorkspaceId = id;
+    }
+
+    public IReadOnlyList<WorkspaceTabSnapshot> RestoreTabs()
+    {
+        return Items.SelectMany(workspace => NormalizeUrls(workspace.SavedUrls).Take(50).Select(url => new WorkspaceTabSnapshot
+        {
+            WorkspaceId = workspace.Id,
+            Url = url
+        })).Take(150).ToArray();
+    }
+
+    public Task SaveMetadataAsync() => PersistAsync();
+
+    public async Task SaveSnapshotAsync(IEnumerable<(string Url, bool IsPrivate, string WorkspaceId)> tabs, string activeWorkspaceId)
+    {
+        var publicTabs = tabs.Where(x => !x.IsPrivate && IsRestorableUrl(x.Url)).ToArray();
+        foreach (var workspace in Items)
+            workspace.SavedUrls = publicTabs.Where(x => string.Equals(x.WorkspaceId, workspace.Id, StringComparison.OrdinalIgnoreCase)).Select(x => x.Url).Take(50).ToList();
+        SetActive(activeWorkspaceId);
+        await PersistAsync();
+    }
+
+    public async Task ClearTabsAsync()
+    {
+        foreach (var workspace in Items) workspace.SavedUrls.Clear();
+        await PersistAsync();
+    }
+
+    private async Task PersistAsync()
+    {
+        await _saveGate.WaitAsync();
+        try
+        {
+            await ProtectedJsonFiles.SaveAsync(AppPaths.Workspaces, "workspaces", new WorkspaceStore
+            {
+                ActiveWorkspaceId = ActiveWorkspaceId,
+                Items = Items.ToList()
+            });
+        }
+        finally { _saveGate.Release(); }
+    }
+
+    private static WorkspaceDefinition CreateDefault() => new()
+    {
+        Id = "default",
+        Name = "DefaultWorkspace",
+        Color = Palette[0]
+    };
+
+    private static string NormalizeId(string? id, HashSet<string> seen)
+    {
+        var candidate = id ?? string.Empty;
+        var value = !string.IsNullOrWhiteSpace(candidate) && candidate.Length <= 64 ? candidate.Trim() : Guid.NewGuid().ToString("N");
+        while (!seen.Add(value)) value = Guid.NewGuid().ToString("N");
+        return value;
+    }
+
+    private static string NormalizeName(string? name, int ordinal)
+    {
+        var value = (name ?? string.Empty).Trim();
+        if (value.Length == 0) value = $"{LocalizationService.Text("Workspace")} {ordinal}";
+        return value.Length > 40 ? value.Substring(0, 40) : value;
+    }
+
+    private static string NormalizeColor(string? color, int ordinal) =>
+        !string.IsNullOrWhiteSpace(color) && Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$") ? color! : Palette[ordinal % Palette.Length];
+
+    private static IEnumerable<string> NormalizeUrls(IEnumerable<string>? urls) =>
+        (urls ?? []).Where(IsRestorableUrl);
+
+    private static bool IsRestorableUrl(string url) => !BrowserHome.IsStartPage(url) &&
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" or "file";
+
+    private sealed class WorkspaceStore
+    {
+        public string ActiveWorkspaceId { get; set; } = string.Empty;
+        public List<WorkspaceDefinition> Items { get; set; } = [];
     }
 }
 
@@ -724,7 +864,7 @@ public sealed class UserScriptService : IUserScriptService
             Architecture.Arm64 => "Windows NT 10.0; ARM64",
             _ => "Windows NT 10.0; Win64; x64"
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/2.1.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/2.1.5");
         return client;
     }
 }

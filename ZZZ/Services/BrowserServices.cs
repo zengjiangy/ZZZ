@@ -125,6 +125,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private readonly IDownloadService _downloads;
     private readonly IPrivacyService _privacy;
     private readonly ITranslationService _translation;
+    private readonly FaviconCacheService _favicons;
     private readonly Dictionary<BrowserTabViewModel, WeakReference<WebView2>> _views = [];
     private readonly Dictionary<CoreWebView2, string> _darkScriptIds = [];
     private readonly Dictionary<CoreWebView2, string> _grayscaleScriptIds = [];
@@ -149,9 +150,9 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     public event EventHandler<BrowserShortcutEventArgs>? ShortcutRequested;
 
 
-    public BrowserLifecycleService(ISettingsService settings, AdBlockManager adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy, ITranslationService translation)
+    public BrowserLifecycleService(ISettingsService settings, AdBlockManager adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy, ITranslationService translation, FaviconCacheService favicons)
     {
-        _settings = settings; _adBlock = adBlock; _scripts = scripts; _history = history; _downloads = downloads; _privacy = privacy; _translation = translation;
+        _settings = settings; _adBlock = adBlock; _scripts = scripts; _history = history; _downloads = downloads; _privacy = privacy; _translation = translation; _favicons = favicons;
         _adBlock.RulesChanged += AdBlock_RulesChanged;
     }
 
@@ -289,6 +290,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         };
         core.SourceChanged += (_, _) => { tab.Url = core.Source; tab.Address = core.Source; };
         core.DocumentTitleChanged += (_, _) => tab.Title = string.IsNullOrWhiteSpace(core.DocumentTitle) ? LocalizationService.Text("NewTab") : core.DocumentTitle;
+        core.FaviconChanged += async (_, _) => await UpdateFaviconAsync(core, tab);
         core.HistoryChanged += (_, _) => { tab.CanGoBack = core.CanGoBack; tab.CanGoForward = core.CanGoForward; };
         core.NavigationCompleted += async (_, e) => await OnNavigationCompletedAsync(core, tab, e);
         core.NewWindowRequested += (_, e) => { e.Handled = true; NewTabRequested?.Invoke(e.Uri, tab.IsPrivate); };
@@ -431,6 +433,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         if (!tab.IsPrivate)
             try { await _history.AddAsync(tab.Title, tab.Url); }
             catch { /* History IO must never tear down the UI dispatcher. */ }
+        await UpdateFaviconAsync(core, tab);
         var cfg = _settings.Current;
         if (cfg.Advanced.EnableAdBlock) await ApplyCosmeticRulesAsync(core, tab.Url);
         var darkScript = WebDarkModeService.ScriptFor(ThemeService.EffectiveWebDarkMode(cfg));
@@ -686,6 +689,19 @@ style.textContent='html{{filter:grayscale(1)!important}}';
         }
     }
 
+    private async Task UpdateFaviconAsync(CoreWebView2 core, BrowserTabViewModel tab)
+    {
+        if (_isShuttingDown || tab.IsClosed || BrowserHome.IsStartPage(tab.Url)) return;
+        var sourceUrl = tab.Url;
+        try
+        {
+            using var stream = await core.GetFaviconAsync(CoreWebView2FaviconImageFormat.Png);
+            var image = await _favicons.CaptureAsync(sourceUrl, stream, persist: !tab.IsPrivate);
+            if (!tab.IsClosed && string.Equals(tab.Url, sourceUrl, StringComparison.OrdinalIgnoreCase) && image is not null) tab.Favicon = image;
+        }
+        catch { }
+    }
+
     public async Task ApplyCurrentSettingsAsync(bool reloadPages)
     {
         foreach (var weak in _views.Values.ToArray())
@@ -866,6 +882,8 @@ public sealed class AppServices : IDisposable
     public UserScriptService UserScripts { get; } = new();
     public AdBlockManager AdBlock { get; } = new();
     public SessionService Session { get; } = new();
+    public WorkspaceService Workspaces { get; } = new();
+    public FaviconCacheService Favicons { get; } = new();
     public DownloadService Downloads { get; }
     public PrivacyService Privacy { get; }
     public TranslationService Translation { get; } = new();
@@ -881,7 +899,7 @@ public sealed class AppServices : IDisposable
     {
         Downloads = new DownloadService(Settings);
         Privacy = new PrivacyService(Settings, History);
-        Browser = new BrowserLifecycleService(Settings, AdBlock, UserScripts, History, Downloads, Privacy, Translation);
+        Browser = new BrowserLifecycleService(Settings, AdBlock, UserScripts, History, Downloads, Privacy, Translation, Favicons);
         Tabs = new TabService(this);
     }
 
@@ -892,7 +910,7 @@ public sealed class AppServices : IDisposable
         // Only data required to paint the first window is on the cold-start path.
         await Settings.LoadAsync();
         var sessionTask = Settings.Current.Browser.RestoreLastSession ? Session.LoadAsync() : Session.ClearAsync();
-        await Task.WhenAll(Bookmarks.LoadAsync(), sessionTask);
+        await Task.WhenAll(Bookmarks.LoadAsync(), Workspaces.LoadAsync(), sessionTask);
     }
 
     public Task EnsureBackgroundInitializedAsync()

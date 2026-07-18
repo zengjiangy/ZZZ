@@ -7,7 +7,7 @@ Cloudflare Worker for serving ZZZ browser release executables from the private
 
 - `GET|HEAD /` returns service health JSON.
 - `GET|HEAD /latest/x64`, `/latest/x86`, and `/latest/arm64` redirect to the
-  corresponding versioned v2.1.0 object.
+  corresponding versioned v2.1.5 object.
 - `GET|HEAD /releases/{version}/{filename.exe}` streams an R2 object as an
   attachment. Versioned responses use immutable one-year caching and support a
   single HTTP byte range.
@@ -17,7 +17,7 @@ R2 objects must use the same path as their public versioned URL, without the
 leading slash. For example:
 
 ```text
-releases/v2.1.0/ZZZ-v2.1.0-win-x64.exe
+releases/v2.1.5/ZZZ-v2.1.5-win-x64.exe
 ```
 
 ## Local verification
