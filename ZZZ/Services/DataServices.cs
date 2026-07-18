@@ -1,11 +1,13 @@
 using System.Net;
 using System.Net.Http;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Interop;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Microsoft.Web.WebView2.Core;
 using ZZZ.Configuration;
 using ZZZ.Models;
@@ -20,14 +22,19 @@ public static class AppPaths
     public static DataStorageMode StorageMode { get; private set; } = DataStorageMode.LocalAppData;
     public static string CustomStoragePath { get; private set; } = string.Empty;
     public static string Settings => Path.Combine(Root, "settings.json");
-    public static string Bookmarks => Path.Combine(Root, "bookmarks.json");
-    public static string History => Path.Combine(Root, "history.json");
+    public static string Bookmarks => Path.Combine(Root, "bookmarks.dat");
+    public static string History => Path.Combine(Root, "history.dat");
+    public static string LegacyBookmarks => Path.Combine(Root, "bookmarks.json");
+    public static string LegacyHistory => Path.Combine(Root, "history.json");
     public static string Scripts => Path.Combine(Root, "userscripts.json");
     public static string UserScriptValues => Path.Combine(Root, "userscript-values.json");
     public static string BlockingRules => Path.Combine(Root, "blocking-rules.txt");
     public static string Session => Path.Combine(Root, "session.json");
+    public static string Workspaces => Path.Combine(Root, "workspaces.dat");
+    public static string Favicons => Path.Combine(Root, "Favicons");
     public static string WebViewData => Path.Combine(Root, "WebView2");
-    public static string PrivateWebViewRoot => Path.Combine(Path.GetTempPath(), "ZZZ", "Private");
+    public static string PrivateWebViewRoot => Path.Combine(Root, "Private");
+    public static string LegacyPrivateWebViewRoot => Path.Combine(Path.GetTempPath(), "ZZZ", "Private");
 
     private static string LocationFile => Path.Combine(ExecutableDirectory, LocationFileName);
 
@@ -170,6 +177,105 @@ internal static class JsonFiles
     }
 }
 
+internal static class ProtectedJsonFiles
+{
+    private static readonly byte[] Header = [0x5A, 0x5A, 0x5A, 0x21, 0x01];
+    private static readonly JsonSerializerOptions Options = new() { WriteIndented = false, PropertyNameCaseInsensitive = true };
+
+    public static async Task<T> LoadAndMigrateAsync<T>(string path, string legacyPath, string purpose, Func<T> fallback)
+    {
+        if (File.Exists(path))
+        {
+            var value = await LoadAsync(path, purpose, fallback);
+            if (File.Exists(legacyPath)) ScrubAndDelete(legacyPath);
+            return value;
+        }
+        if (!File.Exists(legacyPath)) return fallback();
+
+        try
+        {
+            T? value;
+            using (var stream = File.OpenRead(legacyPath))
+                value = await JsonSerializer.DeserializeAsync<T>(stream, Options);
+            if (value is null) return fallback();
+            await SaveAsync(path, purpose, value);
+            ScrubAndDelete(legacyPath);
+            return value;
+        }
+        catch { return fallback(); }
+    }
+
+    public static Task<T> LoadAsync<T>(string path, string purpose, Func<T> fallback) =>
+        Task.FromResult(Load(path, purpose, fallback));
+
+    private static T Load<T>(string path, string purpose, Func<T> fallback)
+    {
+        byte[] plaintext = [];
+        try
+        {
+            var protectedBytes = File.ReadAllBytes(path);
+            if (protectedBytes.Length <= Header.Length || !Header.SequenceEqual(protectedBytes.Take(Header.Length))) return fallback();
+            plaintext = ProtectedData.Unprotect(protectedBytes.Skip(Header.Length).ToArray(), Entropy(purpose), DataProtectionScope.CurrentUser);
+            return JsonSerializer.Deserialize<T>(plaintext, Options) ?? fallback();
+        }
+        catch { return fallback(); }
+        finally { if (plaintext.Length > 0) Array.Clear(plaintext, 0, plaintext.Length); }
+    }
+
+    public static async Task SaveAsync<T>(string path, string purpose, T value)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var plaintext = JsonSerializer.SerializeToUtf8Bytes(value, Options);
+        byte[] protectedBytes;
+        try { protectedBytes = ProtectedData.Protect(plaintext, Entropy(purpose), DataProtectionScope.CurrentUser); }
+        finally { Array.Clear(plaintext, 0, plaintext.Length); }
+
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            {
+                await stream.WriteAsync(Header, 0, Header.Length);
+                await stream.WriteAsync(protectedBytes, 0, protectedBytes.Length);
+                stream.Flush(true);
+            }
+            if (File.Exists(path))
+            {
+                try { File.Replace(temp, path, null, true); return; }
+                catch (PlatformNotSupportedException) { }
+            }
+            if (File.Exists(path)) File.Delete(path);
+            File.Move(temp, path);
+        }
+        finally
+        {
+            Array.Clear(protectedBytes, 0, protectedBytes.Length);
+            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+        }
+    }
+
+    private static byte[] Entropy(string purpose)
+    {
+        using var sha256 = SHA256.Create();
+        return sha256.ComputeHash(Encoding.UTF8.GetBytes("ZZZ 2.1 protected browser data:" + purpose));
+    }
+
+    private static void ScrubAndDelete(string path)
+    {
+        try
+        {
+            var length = new FileInfo(path).Length;
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None, 8192, FileOptions.WriteThrough);
+            var zeros = new byte[8192];
+            for (long written = 0; written < length; written += zeros.Length)
+                stream.Write(zeros, 0, (int)Math.Min(zeros.Length, length - written));
+            stream.Flush(true);
+        }
+        catch { }
+        try { File.Delete(path); } catch { }
+    }
+}
+
 public interface ISettingsService
 {
     AppSettings Current { get; }
@@ -211,6 +317,143 @@ public sealed class SettingsService : ISettingsService
     }
 }
 
+public sealed class WorkspaceService
+{
+    private static readonly string[] Palette = ["#6557C8", "#2F7ED8", "#1B9A75", "#D9822B", "#D64F70", "#7A5AF8", "#148A9C", "#A66B1F"];
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
+    public ObservableCollection<WorkspaceDefinition> Items { get; } = [];
+    public string ActiveWorkspaceId { get; private set; } = string.Empty;
+
+    public WorkspaceDefinition Active => Find(ActiveWorkspaceId) ?? Items.First();
+
+    public void ApplyLocalizedDefaults()
+    {
+        var workspace = Find("default");
+        if (workspace is not null && string.Equals(workspace.Name, "DefaultWorkspace", StringComparison.Ordinal))
+            workspace.Name = LocalizationService.Text("DefaultWorkspace");
+    }
+
+    public async Task LoadAsync()
+    {
+        var store = await ProtectedJsonFiles.LoadAsync(AppPaths.Workspaces, "workspaces", () => new WorkspaceStore());
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var workspace in store.Items.Take(12))
+        {
+            workspace.Id = NormalizeId(workspace.Id, seen);
+            workspace.Name = NormalizeName(workspace.Name, Items.Count + 1);
+            workspace.Color = NormalizeColor(workspace.Color, Items.Count);
+            workspace.SavedUrls = NormalizeUrls(workspace.SavedUrls).Take(50).ToList();
+            Items.Add(workspace);
+        }
+        if (Items.Count == 0) Items.Add(CreateDefault());
+        ActiveWorkspaceId = Find(store.ActiveWorkspaceId)?.Id ?? Items[0].Id;
+    }
+
+    public WorkspaceDefinition Create(string? requestedName)
+    {
+        if (Items.Count >= 12) return Active;
+        var workspace = new WorkspaceDefinition
+        {
+            Name = NormalizeName(requestedName, Items.Count + 1),
+            Color = Palette[Items.Count % Palette.Length]
+        };
+        Items.Add(workspace);
+        ActiveWorkspaceId = workspace.Id;
+        return workspace;
+    }
+
+    public bool Remove(WorkspaceDefinition workspace)
+    {
+        if (Items.Count <= 1 || !Items.Remove(workspace)) return false;
+        if (string.Equals(ActiveWorkspaceId, workspace.Id, StringComparison.OrdinalIgnoreCase)) ActiveWorkspaceId = Items[0].Id;
+        return true;
+    }
+
+    public WorkspaceDefinition? Find(string? id) => Items.FirstOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    public void SetActive(string id)
+    {
+        if (Find(id) is not null) ActiveWorkspaceId = id;
+    }
+
+    public IReadOnlyList<WorkspaceTabSnapshot> RestoreTabs()
+    {
+        return Items.SelectMany(workspace => NormalizeUrls(workspace.SavedUrls).Take(50).Select(url => new WorkspaceTabSnapshot
+        {
+            WorkspaceId = workspace.Id,
+            Url = url
+        })).Take(150).ToArray();
+    }
+
+    public Task SaveMetadataAsync() => PersistAsync();
+
+    public async Task SaveSnapshotAsync(IEnumerable<(string Url, bool IsPrivate, string WorkspaceId)> tabs, string activeWorkspaceId)
+    {
+        var publicTabs = tabs.Where(x => !x.IsPrivate && IsRestorableUrl(x.Url)).ToArray();
+        foreach (var workspace in Items)
+            workspace.SavedUrls = publicTabs.Where(x => string.Equals(x.WorkspaceId, workspace.Id, StringComparison.OrdinalIgnoreCase)).Select(x => x.Url).Take(50).ToList();
+        SetActive(activeWorkspaceId);
+        await PersistAsync();
+    }
+
+    public async Task ClearTabsAsync()
+    {
+        foreach (var workspace in Items) workspace.SavedUrls.Clear();
+        await PersistAsync();
+    }
+
+    private async Task PersistAsync()
+    {
+        await _saveGate.WaitAsync();
+        try
+        {
+            await ProtectedJsonFiles.SaveAsync(AppPaths.Workspaces, "workspaces", new WorkspaceStore
+            {
+                ActiveWorkspaceId = ActiveWorkspaceId,
+                Items = Items.ToList()
+            });
+        }
+        finally { _saveGate.Release(); }
+    }
+
+    private static WorkspaceDefinition CreateDefault() => new()
+    {
+        Id = "default",
+        Name = "DefaultWorkspace",
+        Color = Palette[0]
+    };
+
+    private static string NormalizeId(string? id, HashSet<string> seen)
+    {
+        var candidate = id ?? string.Empty;
+        var value = !string.IsNullOrWhiteSpace(candidate) && candidate.Length <= 64 ? candidate.Trim() : Guid.NewGuid().ToString("N");
+        while (!seen.Add(value)) value = Guid.NewGuid().ToString("N");
+        return value;
+    }
+
+    private static string NormalizeName(string? name, int ordinal)
+    {
+        var value = (name ?? string.Empty).Trim();
+        if (value.Length == 0) value = $"{LocalizationService.Text("Workspace")} {ordinal}";
+        return value.Length > 40 ? value.Substring(0, 40) : value;
+    }
+
+    private static string NormalizeColor(string? color, int ordinal) =>
+        !string.IsNullOrWhiteSpace(color) && Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$") ? color! : Palette[ordinal % Palette.Length];
+
+    private static IEnumerable<string> NormalizeUrls(IEnumerable<string>? urls) =>
+        (urls ?? []).Where(IsRestorableUrl);
+
+    private static bool IsRestorableUrl(string url) => !BrowserHome.IsStartPage(url) &&
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" or "file";
+
+    private sealed class WorkspaceStore
+    {
+        public string ActiveWorkspaceId { get; set; } = string.Empty;
+        public List<WorkspaceDefinition> Items { get; set; } = [];
+    }
+}
+
 public interface IBookmarkService
 {
     event EventHandler? Changed;
@@ -230,23 +473,23 @@ public sealed class BookmarkService : IBookmarkService
     private List<Bookmark> _items = [];
     public event EventHandler? Changed;
     public IReadOnlyList<Bookmark> Items => _items;
-    public async Task LoadAsync() => _items = await JsonFiles.LoadAsync(AppPaths.Bookmarks, () => new List<Bookmark>());
+    public async Task LoadAsync() => _items = await ProtectedJsonFiles.LoadAndMigrateAsync(AppPaths.Bookmarks, AppPaths.LegacyBookmarks, "bookmarks", () => new List<Bookmark>());
     public async Task AddAsync(string title, string url)
     {
         if (Contains(url)) return;
         _items.Add(new Bookmark { Title = string.IsNullOrWhiteSpace(title) ? url : title, Url = url });
-        await JsonFiles.SaveAsync(AppPaths.Bookmarks, _items);
+        await ProtectedJsonFiles.SaveAsync(AppPaths.Bookmarks, "bookmarks", _items);
         Changed?.Invoke(this, EventArgs.Empty);
     }
     public async Task RemoveAsync(Bookmark item)
     {
         if (!_items.Remove(item)) return;
-        await JsonFiles.SaveAsync(AppPaths.Bookmarks, _items);
+        await ProtectedJsonFiles.SaveAsync(AppPaths.Bookmarks, "bookmarks", _items);
         Changed?.Invoke(this, EventArgs.Empty);
     }
     public async Task SaveAsync()
     {
-        await JsonFiles.SaveAsync(AppPaths.Bookmarks, _items);
+        await ProtectedJsonFiles.SaveAsync(AppPaths.Bookmarks, "bookmarks", _items);
         Changed?.Invoke(this, EventArgs.Empty);
     }
     public bool Contains(string url) => _items.Any(x => SameUrl(x.Url, url));
@@ -257,7 +500,7 @@ public sealed class BookmarkService : IBookmarkService
             _items.Add(new Bookmark { Title = string.IsNullOrWhiteSpace(title) ? url : title, Url = url });
         else
             _items.Remove(existing);
-        await JsonFiles.SaveAsync(AppPaths.Bookmarks, _items);
+        await ProtectedJsonFiles.SaveAsync(AppPaths.Bookmarks, "bookmarks", _items);
         Changed?.Invoke(this, EventArgs.Empty);
         return existing is null;
     }
@@ -306,7 +549,7 @@ public sealed class BookmarkService : IBookmarkService
             var group = string.Join(" / ", folders.Where(x => !string.IsNullOrWhiteSpace(x)));
             if (!Contains(url)) { _items.Add(new Bookmark { Title = title, Url = url, Group = group }); changed = true; }
         }
-        await JsonFiles.SaveAsync(AppPaths.Bookmarks, _items);
+        await ProtectedJsonFiles.SaveAsync(AppPaths.Bookmarks, "bookmarks", _items);
         if (changed) Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -345,7 +588,7 @@ public sealed class HistoryService : IHistoryService
     public async Task LoadAsync()
     {
         await _gate.WaitAsync();
-        try { _items = await JsonFiles.LoadAsync(AppPaths.History, () => new List<HistoryEntry>()); }
+        try { _items = await ProtectedJsonFiles.LoadAndMigrateAsync(AppPaths.History, AppPaths.LegacyHistory, "history", () => new List<HistoryEntry>()); }
         finally { _gate.Release(); }
     }
     public async Task AddAsync(string title, string url)
@@ -357,20 +600,20 @@ public sealed class HistoryService : IHistoryService
             if (!_recordingEnabled) return;
             _items.Insert(0, new HistoryEntry { Title = title, Url = url });
             if (_items.Count > 3000) _items.RemoveRange(3000, _items.Count - 3000);
-            await JsonFiles.SaveAsync(AppPaths.History, _items);
+            await ProtectedJsonFiles.SaveAsync(AppPaths.History, "history", _items);
         }
         finally { _gate.Release(); }
     }
     public async Task RemoveAsync(HistoryEntry item)
     {
         await _gate.WaitAsync();
-        try { if (_items.Remove(item)) await JsonFiles.SaveAsync(AppPaths.History, _items); }
+        try { if (_items.Remove(item)) await ProtectedJsonFiles.SaveAsync(AppPaths.History, "history", _items); }
         finally { _gate.Release(); }
     }
     public async Task ClearAsync()
     {
         await _gate.WaitAsync();
-        try { _items.Clear(); await JsonFiles.SaveAsync(AppPaths.History, _items); }
+        try { _items.Clear(); await ProtectedJsonFiles.SaveAsync(AppPaths.History, "history", _items); }
         finally { _gate.Release(); }
     }
 }
@@ -621,7 +864,7 @@ public sealed class UserScriptService : IUserScriptService
             Architecture.Arm64 => "Windows NT 10.0; ARM64",
             _ => "Windows NT 10.0; Win64; x64"
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/2.0.6");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/2.1.5");
         return client;
     }
 }

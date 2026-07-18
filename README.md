@@ -2,9 +2,11 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [한국어](README.ko.md) | [繁體中文](README.zh-TW.md)
 
+官方网站：[zzz.campusphere.ltd](https://zzz.campusphere.ltd/)
+
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF 和 Microsoft WebView2 构建。它使用系统中的 WebView2 Runtime，不额外捆绑 Chromium，并支持把浏览器数据存放在程序目录中，方便随身携带。
 
-当前版本：**2.0.7**
+当前版本：**2.1.5**
 
 ## 下载与运行
 
@@ -12,9 +14,9 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 
 | 文件 | 适用平台 |
 |---|---|
-| `ZZZ-v2.0.7-win-x64.exe` | Windows x64 原生版本 |
-| `ZZZ-v2.0.7-win-x86.exe` | Windows 10 x86 32 位兼容版；也可在 Windows 10 on Arm 上以 x86 仿真运行 |
-| `ZZZ-v2.0.7-win-arm64.exe` | Windows ARM64 原生版本 |
+| `ZZZ-v2.1.5-win-x64.exe` | Windows x64 原生版本 |
+| `ZZZ-v2.1.5-win-x86.exe` | Windows 10 x86 32 位兼容版；也可在 Windows 10 on Arm 上以 x86 仿真运行 |
+| `ZZZ-v2.1.5-win-arm64.exe` | Windows ARM64 原生版本 |
 
 下载后直接运行即可，无需安装。系统需要：
 
@@ -29,7 +31,8 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 ### 浏览与界面
 
 - 可在简体中文、繁体中文、英语、日语、韩语、葡萄牙语、西班牙语、俄语、法语和德语之间切换界面语言
-- 多标签页、复制标签页、恢复最近关闭页面，以及关闭其他或右侧标签页
+- 横向或可折叠垂直标签页；支持 favicon、复制、关闭其他/右侧标签，以及带平滑位移动画的实时拖拽排序
+- Edge 风格工作区：可创建、重命名、删除和切换独立标签集合，也可把当前标签移入其他工作区；工作区与页面分组会跨重启恢复
 - 左右或上下分屏浏览，支持各窗格独立缩放和 `Ctrl+Shift+W` 快速退出分屏
 - 地址栏统一处理网址与搜索，支持历史记录匹配和实时搜索联想
 - 原生轻量启动页，可使用纯色、图片或动态 GIF 背景，并按分组展示书签
@@ -40,7 +43,7 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 
 ### 书签与数据
 
-- 书签分组、编辑和筛选，支持单独控制书签是否显示在主页
+- 书签分组、编辑和筛选，支持单独控制书签是否显示在主页；资料库、历史记录、启动页和标签栏统一显示网站图标
 - 导入或导出浏览器书签 HTML，备份和恢复设置、规则与浏览数据
 - 历史记录支持双击打开、删除单条记录和全部清空
 - 数据可存放在本机 AppData、程序目录或自定义路径，并支持迁移
@@ -48,6 +51,8 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 ### 隐私与权限
 
 - 独立隐私标签页，不保留历史、会话、缓存、Cookie 或在线搜索联想
+- 历史、书签和工作区页面列表使用 Windows DPAPI（当前用户）加密保存；2.1.0 首次读取时自动迁移并擦除旧明文历史/书签 JSON
+- 隐私目录跟随所选数据位置，崩溃清理由独立本机进程负责，不依赖 PowerShell
 - DNT、GPC、基于完整 Public Suffix List 的严格第三方 Cookie 阻止，以及 document-start/子框架级 WebRTC 限制
 - 可配置摄像头、麦克风、通知、剪贴板和位置等站点权限
 - 原生位置权限始终拒绝；可在隔离的模拟层中询问或返回自定义坐标
@@ -74,7 +79,7 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 
 通过主菜单或 `Ctrl+Shift+N` 新建隐私标签页。每个隐私标签页使用独立的 WebView2 隐私配置，不与普通标签页或其他隐私标签页共享 Cookie、缓存和本地存储，也不会写入 ZZZ 历史记录或会话恢复数据。
 
-隐私数据目录使用仅当前用户可访问的 ACL，并在系统支持时使用 EFS 加密。关闭标签页后会清理数据；独立监护进程会在主程序崩溃或被强制结束后继续重试清理，下次启动仍会执行兜底清理。用户主动保存的下载文件和书签仍会保留。
+隐私数据目录跟随当前数据根目录：本机模式位于 `%LocalAppData%\ZZZ\Private`，便携模式位于 `<程序目录>\Data\Private`，自定义模式则位于用户选择的目录中。目录使用仅当前用户可访问的 ACL，并在文件系统支持时使用 EFS。关闭标签页后会清理数据；独立本机清理进程在主程序崩溃或被强制结束后继续重试，不依赖 PowerShell；下次启动还会清理由蓝屏、断电等情况遗留的目录。用户主动保存的下载文件和书签仍会保留。
 
 ## 网页翻译
 
@@ -87,6 +92,10 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 ## 便携模式
 
 在“设置 → 备份 → 数据与 Cookie 存储位置”中选择“便携模式”，保存后重启。ZZZ 会把设置、书签、历史、脚本、Cookie 和缓存存放到 EXE 同目录的 `Data` 文件夹。
+
+自 2.1.0 起，正常退出会先停止导航、完成清除策略、释放全部 WebView2 控制器，并等待内核子进程退出，然后才让窗口消失。请在窗口完全关闭后再安全弹出移动存储；程序运行中直接拔盘或系统突然断电属于物理中断，任何应用都无法保证此时的缓存和数据库写入完整。
+
+历史和书签的加密密钥绑定当前 Windows 用户，WebView2 的登录数据也由 Windows/内核保护。因此，把便携目录移到另一台电脑或另一个 Windows 帐户时，这些受保护数据可能无法解密；跨帐户迁移书签请先导出为 HTML。
 
 移动程序时，请一并复制：
 
@@ -118,7 +127,7 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 dotnet build ZZZ.sln -c Release
 ```
 
-x64 版本输出位于 `ZZZ\bin\Release\net48\ZZZ.exe`。托管依赖以及 x86、x64、ARM64 WebView2 原生加载器会嵌入到对应架构的单文件 EXE 中。
+x64 版本输出位于 `ZZZ\bin\Release\net48\ZZZ.exe`。托管依赖以及 x86、x64、ARM64 WebView2 原生加载器会嵌入到对应架构的单文件 EXE 中；未使用的 WebView2 WinForms 程序集不会进入发布物。
 
 x86 32 位兼容构建：
 

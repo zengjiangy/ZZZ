@@ -17,6 +17,12 @@ public partial class App : Application
         // treating its successful close as "last window closed" before the
         // actual browser window has been created.
         ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
+        if (await PrivateDataGuard.TryRunCleanupWorkerAsync(e.Args))
+        {
+            Shutdown();
+            return;
+        }
+        PrivateDataGuard.CleanupStaleWorkerCopies();
         AppPaths.Initialize();
         _singleInstance = new SingleInstanceService();
         if (!_singleInstance.IsPrimary)
@@ -30,6 +36,7 @@ public partial class App : Application
         Services = new AppServices();
         await Services.InitializeAsync();
         LocalizationService.Apply(Services.Settings.Current.Ui.Language);
+        Services.Workspaces.ApplyLocalizedDefaults();
         ThemeService.Apply(Services.Settings.Current.Appearance, Services.Settings.Current.StartPage, Services.Settings.Current.Ui.GrayscaleMode);
         if (!string.Equals(Services.Settings.Current.Legal.AcceptedTermsVersion, TermsWindow.CurrentTermsVersion, StringComparison.Ordinal))
         {

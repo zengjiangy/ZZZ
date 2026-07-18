@@ -1,21 +1,44 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using System.Text.Json.Serialization;
+using System.Windows.Media;
 
 namespace ZZZ.Models;
 
-public sealed class Bookmark
+public sealed partial class Bookmark : ObservableObject
 {
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string Group { get; set; } = string.Empty;
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public bool ShowOnStartPage { get; set; } = true;
+    [ObservableProperty]
+    [property: JsonIgnore]
+    private ImageSource? favicon;
 }
 
-public sealed class HistoryEntry
+public sealed partial class HistoryEntry : ObservableObject
 {
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public DateTime VisitedUtc { get; set; } = DateTime.UtcNow;
+    [ObservableProperty]
+    [property: JsonIgnore]
+    private ImageSource? favicon;
+}
+
+public sealed partial class WorkspaceDefinition : ObservableObject
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    [ObservableProperty] private string name = string.Empty;
+    [ObservableProperty] private string color = "#6557C8";
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public List<string> SavedUrls { get; set; } = [];
+}
+
+public sealed class WorkspaceTabSnapshot
+{
+    public string WorkspaceId { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
 }
 
 public sealed class BrowserProcessSnapshot

@@ -35,6 +35,8 @@ public sealed class UiSettings
 {
     public string Language { get; set; } = "auto";
     public bool ShowTabBar { get; set; } = true;
+    public bool UseVerticalTabs { get; set; }
+    public bool VerticalTabsCollapsed { get; set; }
     public bool ShowToolbar { get; set; } = true;
     public bool ShowAddressBar { get; set; } = true;
     public bool GrayscaleMode { get; set; }

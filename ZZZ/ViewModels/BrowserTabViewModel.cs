@@ -8,6 +8,7 @@ using ZZZ.Services;
 using ZZZ.Configuration;
 using Microsoft.Win32;
 using System.Text.Json;
+using System.Windows.Media;
 
 namespace ZZZ.ViewModels;
 
@@ -22,6 +23,8 @@ public partial class BrowserTabViewModel : ObservableObject
     [ObservableProperty] private string url;
     [ObservableProperty] private string address;
     [ObservableProperty] private string siteIdentity = "Web";
+    [ObservableProperty] private ImageSource? favicon;
+    [ObservableProperty] private string workspaceId = "default";
     [ObservableProperty] private bool canGoBack;
     [ObservableProperty] private bool canGoForward;
     [ObservableProperty] private bool isLoading;
@@ -38,10 +41,11 @@ public partial class BrowserTabViewModel : ObservableObject
     public bool IsClosed { get; private set; }
     internal CancellationToken LifetimeToken => _lifetimeCancellation.Token;
 
-    public BrowserTabViewModel(AppServices services, string url, bool isPrivate = false)
+    public BrowserTabViewModel(AppServices services, string url, bool isPrivate = false, string? workspaceId = null)
     {
         _services = services;
         IsPrivate = isPrivate;
+        this.workspaceId = string.IsNullOrWhiteSpace(workspaceId) ? "default" : workspaceId!;
         title = LocalizationService.Text(isPrivate ? "PrivateTab" : "NewTab");
         this.url = url;
         address = url;
@@ -143,6 +147,7 @@ public partial class BrowserTabViewModel : ObservableObject
             _ = IgnoreScriptErrorAsync(core, ReaderDisableScript);
         IsReaderMode = false;
         SiteIdentity = BrowserHome.IsStartPage(value) ? LocalizationService.Text("StartPage") : IdentifySite(value);
+        if (BrowserHome.IsStartPage(value)) Favicon = null;
         OnPropertyChanged(nameof(IsStartPage));
         ToggleReaderModeCommand.NotifyCanExecuteChanged();
     }

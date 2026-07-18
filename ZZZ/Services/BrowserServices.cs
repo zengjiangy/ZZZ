@@ -9,9 +9,6 @@ using ZZZ.Views;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
-using System.Security.AccessControl;
-using System.Security.Principal;
-using System.Text;
 
 namespace ZZZ.Services;
 
@@ -128,6 +125,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private readonly IDownloadService _downloads;
     private readonly IPrivacyService _privacy;
     private readonly ITranslationService _translation;
+    private readonly FaviconCacheService _favicons;
     private readonly Dictionary<BrowserTabViewModel, WeakReference<WebView2>> _views = [];
     private readonly Dictionary<CoreWebView2, string> _darkScriptIds = [];
     private readonly Dictionary<CoreWebView2, string> _grayscaleScriptIds = [];
@@ -145,15 +143,16 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private Task<CoreWebView2Environment>? _privateEnvironmentTask;
     private bool _runtimeUpdateNotified;
     private volatile bool _isShuttingDown;
+    private bool _shutdownCompleted;
     private int _pendingInitializations;
     private TaskCompletionSource<bool>? _initializationsDrained;
     public event Action<string, bool>? NewTabRequested;
     public event EventHandler<BrowserShortcutEventArgs>? ShortcutRequested;
 
 
-    public BrowserLifecycleService(ISettingsService settings, AdBlockManager adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy, ITranslationService translation)
+    public BrowserLifecycleService(ISettingsService settings, AdBlockManager adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy, ITranslationService translation, FaviconCacheService favicons)
     {
-        _settings = settings; _adBlock = adBlock; _scripts = scripts; _history = history; _downloads = downloads; _privacy = privacy; _translation = translation;
+        _settings = settings; _adBlock = adBlock; _scripts = scripts; _history = history; _downloads = downloads; _privacy = privacy; _translation = translation; _favicons = favicons;
         _adBlock.RulesChanged += AdBlock_RulesChanged;
     }
 
@@ -291,6 +290,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         };
         core.SourceChanged += (_, _) => { tab.Url = core.Source; tab.Address = core.Source; };
         core.DocumentTitleChanged += (_, _) => tab.Title = string.IsNullOrWhiteSpace(core.DocumentTitle) ? LocalizationService.Text("NewTab") : core.DocumentTitle;
+        core.FaviconChanged += async (_, _) => await UpdateFaviconAsync(core, tab);
         core.HistoryChanged += (_, _) => { tab.CanGoBack = core.CanGoBack; tab.CanGoForward = core.CanGoForward; };
         core.NavigationCompleted += async (_, e) => await OnNavigationCompletedAsync(core, tab, e);
         core.NewWindowRequested += (_, e) => { e.Handled = true; NewTabRequested?.Invoke(e.Uri, tab.IsPrivate); };
@@ -433,6 +433,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         if (!tab.IsPrivate)
             try { await _history.AddAsync(tab.Title, tab.Url); }
             catch { /* History IO must never tear down the UI dispatcher. */ }
+        await UpdateFaviconAsync(core, tab);
         var cfg = _settings.Current;
         if (cfg.Advanced.EnableAdBlock) await ApplyCosmeticRulesAsync(core, tab.Url);
         var darkScript = WebDarkModeService.ScriptFor(ThemeService.EffectiveWebDarkMode(cfg));
@@ -673,14 +674,30 @@ style.textContent='html{{filter:grayscale(1)!important}}';
 
     internal void CleanupStalePrivateData()
     {
+        foreach (var root in new[] { AppPaths.PrivateWebViewRoot, AppPaths.LegacyPrivateWebViewRoot }.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                if (!Directory.Exists(root)) continue;
+                foreach (var path in Directory.GetDirectories(root))
+                {
+                    if (string.Equals(path, _privateDataPath, StringComparison.OrdinalIgnoreCase)) continue;
+                    PrivateDataGuard.TryDeleteProfile(path);
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task UpdateFaviconAsync(CoreWebView2 core, BrowserTabViewModel tab)
+    {
+        if (_isShuttingDown || tab.IsClosed || BrowserHome.IsStartPage(tab.Url)) return;
+        var sourceUrl = tab.Url;
         try
         {
-            if (!Directory.Exists(AppPaths.PrivateWebViewRoot)) return;
-            foreach (var path in Directory.GetDirectories(AppPaths.PrivateWebViewRoot))
-            {
-                if (string.Equals(path, _privateDataPath, StringComparison.OrdinalIgnoreCase)) continue;
-                try { Directory.Delete(path, true); } catch { }
-            }
+            using var stream = await core.GetFaviconAsync(CoreWebView2FaviconImageFormat.Png);
+            var image = await _favicons.CaptureAsync(sourceUrl, stream, persist: !tab.IsPrivate);
+            if (!tab.IsClosed && string.Equals(tab.Url, sourceUrl, StringComparison.OrdinalIgnoreCase) && image is not null) tab.Favicon = image;
         }
         catch { }
     }
@@ -747,6 +764,62 @@ style.textContent='html{{filter:grayscale(1)!important}}';
                 try { view.CoreWebView2?.Stop(); } catch { }
     }
 
+    public async Task CompleteShutdownAsync()
+    {
+        if (_shutdownCompleted) return;
+        BeginShutdown();
+        try { await WaitForPendingInitializationsAsync(); } catch { }
+
+        var environments = _tabEnvironments.Values.ToList();
+        lock (_environmentGate)
+        {
+            if (_environmentTask?.Status == TaskStatus.RanToCompletion) environments.Add(_environmentTask.Result);
+            if (_privateEnvironmentTask?.Status == TaskStatus.RanToCompletion) environments.Add(_privateEnvironmentTask.Result);
+        }
+        var processIds = environments.SelectMany(environment =>
+        {
+            try { return environment.GetProcessInfos().Select(info => info.ProcessId).ToArray(); }
+            catch { return Array.Empty<int>(); }
+        }).Distinct().ToArray();
+
+        var privateClears = _views.Where(x => x.Key.IsPrivate).Select(x =>
+        {
+            try
+            {
+                return x.Value.TryGetTarget(out var view) && view.CoreWebView2 is { } core
+                    ? core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile)
+                    : Task.CompletedTask;
+            }
+            catch { return Task.CompletedTask; }
+        }).ToArray();
+        if (privateClears.Length > 0)
+            await Task.WhenAny(Task.WhenAll(privateClears), Task.Delay(TimeSpan.FromSeconds(5)));
+
+        foreach (var tab in _views.Keys.ToArray()) Close(tab);
+        await WaitForProcessesToExitAsync(processIds, TimeSpan.FromSeconds(12));
+        PrivateDataGuard.TryDeleteProfile(_privateDataPath);
+        _shutdownCompleted = true;
+    }
+
+    private static async Task WaitForProcessesToExitAsync(IEnumerable<int> processIds, TimeSpan timeout)
+    {
+        var remaining = new HashSet<int>(processIds);
+        var deadline = DateTime.UtcNow + timeout;
+        while (remaining.Count > 0 && DateTime.UtcNow < deadline)
+        {
+            foreach (var processId in remaining.ToArray())
+            {
+                try
+                {
+                    using var process = Process.GetProcessById(processId);
+                    if (process.HasExited) remaining.Remove(processId);
+                }
+                catch { remaining.Remove(processId); }
+            }
+            if (remaining.Count > 0) await Task.Delay(100);
+        }
+    }
+
     public void Sleep(BrowserTabViewModel tab)
     {
         if (!_views.TryGetValue(tab, out var weak)) return;
@@ -765,7 +838,7 @@ style.textContent='html{{filter:grayscale(1)!important}}';
                     _scriptBridges.Remove(core);
                     if (_adBlockPickers.TryGetValue(core, out var picker)) { _adBlockPickers.Remove(core); picker.Dispose(); }
                     if (_scriptBrokers.TryGetValue(core, out var broker)) { _scriptBrokers.Remove(core); broker.Dispose(); }
-                    if (tab.IsPrivate) _ = core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile);
+                    if (tab.IsPrivate && !_isShuttingDown) _ = core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile);
                     try { core.RemoveHostObjectFromScript("zzzUserscript"); } catch { }
                 }
             }
@@ -794,61 +867,8 @@ style.textContent='html{{filter:grayscale(1)!important}}';
         _adBlock.RulesChanged -= AdBlock_RulesChanged;
         foreach (var tab in _views.Keys.ToArray()) Close(tab);
         _views.Clear();
-        try { if (Directory.Exists(_privateDataPath)) Directory.Delete(_privateDataPath, true); } catch { }
+        PrivateDataGuard.TryDeleteProfile(_privateDataPath);
     }
-}
-
-internal static class PrivateDataGuard
-{
-    private static readonly object Gate = new();
-    private static readonly HashSet<string> Watched = new(StringComparer.OrdinalIgnoreCase);
-
-    public static void ProtectAndWatch(string path)
-    {
-        lock (Gate)
-        {
-            if (!Watched.Add(path)) return;
-        }
-        try
-        {
-            var currentUser = WindowsIdentity.GetCurrent().User;
-            if (currentUser is not null)
-            {
-                var security = new DirectorySecurity();
-                security.SetAccessRuleProtection(true, false);
-                const InheritanceFlags inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
-                security.AddAccessRule(new FileSystemAccessRule(currentUser, FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
-                security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
-                new DirectoryInfo(path).SetAccessControl(security);
-            }
-        }
-        catch { }
-        try { EncryptFile(path); } catch { }
-        StartCleanupWatchdog(path);
-    }
-
-    [System.Runtime.InteropServices.DllImport("advapi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
-    private static extern bool EncryptFile(string path);
-
-    private static void StartCleanupWatchdog(string path)
-    {
-        try
-        {
-            var script = "$targetPid=" + Process.GetCurrentProcess().Id + ";$target=" + QuotePowerShell(path) +
-                ";try{Wait-Process -Id $targetPid -ErrorAction SilentlyContinue}catch{};" +
-                "for($i=0;$i -lt 240;$i++){try{if(Test-Path -LiteralPath $target){Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop};break}catch{Start-Sleep -Milliseconds 500}}";
-            var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
-            Process.Start(new ProcessStartInfo("powershell.exe", "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " + encoded)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            });
-        }
-        catch { }
-    }
-
-    private static string QuotePowerShell(string value) => "'" + value.Replace("'", "''") + "'";
 }
 
 public sealed class AppServices : IDisposable
@@ -862,6 +882,8 @@ public sealed class AppServices : IDisposable
     public UserScriptService UserScripts { get; } = new();
     public AdBlockManager AdBlock { get; } = new();
     public SessionService Session { get; } = new();
+    public WorkspaceService Workspaces { get; } = new();
+    public FaviconCacheService Favicons { get; } = new();
     public DownloadService Downloads { get; }
     public PrivacyService Privacy { get; }
     public TranslationService Translation { get; } = new();
@@ -877,17 +899,18 @@ public sealed class AppServices : IDisposable
     {
         Downloads = new DownloadService(Settings);
         Privacy = new PrivacyService(Settings, History);
-        Browser = new BrowserLifecycleService(Settings, AdBlock, UserScripts, History, Downloads, Privacy, Translation);
+        Browser = new BrowserLifecycleService(Settings, AdBlock, UserScripts, History, Downloads, Privacy, Translation, Favicons);
         Tabs = new TabService(this);
     }
 
     public async Task InitializeAsync()
     {
         Directory.CreateDirectory(AppPaths.Root);
+        Browser.CleanupStalePrivateData();
         // Only data required to paint the first window is on the cold-start path.
         await Settings.LoadAsync();
         var sessionTask = Settings.Current.Browser.RestoreLastSession ? Session.LoadAsync() : Session.ClearAsync();
-        await Task.WhenAll(Bookmarks.LoadAsync(), sessionTask);
+        await Task.WhenAll(Bookmarks.LoadAsync(), Workspaces.LoadAsync(), sessionTask);
     }
 
     public Task EnsureBackgroundInitializedAsync()
@@ -922,5 +945,6 @@ public sealed class AppServices : IDisposable
         var background = initialization ?? Task.CompletedTask;
         try { await Task.WhenAll(background, Browser.WaitForPendingInitializationsAsync()); } catch { }
     }
+    public Task CompleteShutdownAsync() => Browser.CompleteShutdownAsync();
     public void Dispose() { Browser.Dispose(); AdBlock.Dispose(); Translation.Dispose(); }
 }

@@ -8,6 +8,8 @@ using ZZZ.Views;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using ZZZ.Services;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace ZZZ;
 
@@ -19,6 +21,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _addressSuggestionCancellation;
     private Point _tabDragStart;
     private BrowserTabViewModel? _draggedTab;
+    private ListBox? _dragSourceList;
     private bool _isFullscreen;
     private bool _splitVertical;
     private bool _splitOrientationManuallySet;
@@ -47,8 +50,11 @@ public partial class MainWindow : Window
 
     private void Tabs_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.OldItems is null) return;
-        foreach (BrowserTabViewModel tab in e.OldItems)
+        if (e.Action == NotifyCollectionChangedAction.Move) return;
+        var removed = e.Action == NotifyCollectionChangedAction.Reset
+            ? _tabViews.Keys.Where(x => !ViewModel.Tabs.Contains(x)).ToArray()
+            : e.OldItems?.Cast<BrowserTabViewModel>().ToArray() ?? [];
+        foreach (var tab in removed)
         {
             _tabViews.Remove(tab);
             if (ReferenceEquals(_findTab, tab)) CloseFind();
@@ -66,7 +72,7 @@ public partial class MainWindow : Window
 
     private void TabsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (TabsList.SelectedItem is not BrowserTabViewModel tab || DataContext is not MainViewModel vm) return;
+        if (sender is not ListBox { SelectedItem: BrowserTabViewModel tab } || DataContext is not MainViewModel vm) return;
         vm.SelectedTab = tab;
         tab.Activate();
         ShowSelectedTab(tab);
@@ -74,54 +80,123 @@ public partial class MainWindow : Window
 
     private void TabsList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        _tabDragStart = e.GetPosition(TabsList);
-        _draggedTab = FindTabContainer(e.OriginalSource as DependencyObject)?.DataContext as BrowserTabViewModel;
+        if (sender is not ListBox list) return;
+        _dragSourceList = list;
+        _tabDragStart = e.GetPosition(list);
+        _draggedTab = FindTabContainer(list, e.OriginalSource as DependencyObject)?.DataContext as BrowserTabViewModel;
     }
 
     private void TabsList_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed || _draggedTab is null) return;
-        var current = e.GetPosition(TabsList);
+        if (_dragSourceList is not { } list) return;
+        var current = e.GetPosition(list);
         if (Math.Abs(current.X - _tabDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(current.Y - _tabDragStart.Y) < SystemParameters.MinimumVerticalDragDistance) return;
         var tab = _draggedTab;
         _draggedTab = null;
-        DragDrop.DoDragDrop(TabsList, new DataObject(typeof(BrowserTabViewModel), tab), DragDropEffects.Move);
+        var container = list.ItemContainerGenerator.ContainerFromItem(tab) as ListBoxItem;
+        if (container is not null) container.Opacity = 0.55;
+        DragDrop.DoDragDrop(list, new DataObject(typeof(BrowserTabViewModel), tab), DragDropEffects.Move);
+        if (container is not null) container.Opacity = 1;
+        _dragSourceList = null;
     }
 
     private void TabsList_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(typeof(BrowserTabViewModel)) ? DragDropEffects.Move : DragDropEffects.None;
+        if (sender is not ListBox list || e.Data.GetData(typeof(BrowserTabViewModel)) is not BrowserTabViewModel tab)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+        e.Effects = DragDropEffects.Move;
+        var oldIndex = ViewModel.WorkspaceTabs.IndexOf(tab);
+        var destination = GetTabDestination(list, e, tab);
+        if (oldIndex >= 0 && destination >= 0 && oldIndex != destination)
+        {
+            ViewModel.Services.Tabs.MoveWithinWorkspace(tab, destination);
+            AnimateTabReorder(list, oldIndex, destination);
+        }
         e.Handled = true;
     }
 
     private void TabsList_Drop(object sender, DragEventArgs e)
     {
         if (e.Data.GetData(typeof(BrowserTabViewModel)) is not BrowserTabViewModel tab) return;
-        var insertionIndex = ViewModel.Tabs.Count;
-        if (FindTabContainer(e.OriginalSource as DependencyObject) is { } targetContainer && targetContainer.DataContext is BrowserTabViewModel target)
-        {
-            insertionIndex = ViewModel.Tabs.IndexOf(target);
-            if (e.GetPosition(targetContainer).X > targetContainer.ActualWidth / 2) insertionIndex++;
-        }
-        var sourceIndex = ViewModel.Tabs.IndexOf(tab);
-        if (sourceIndex < 0) return;
-        if (sourceIndex < insertionIndex) insertionIndex--;
-        ViewModel.Services.Tabs.Move(tab, insertionIndex);
+        if (sender is not ListBox list) return;
+        var destination = GetTabDestination(list, e, tab);
+        if (destination >= 0) ViewModel.Services.Tabs.MoveWithinWorkspace(tab, destination);
         ViewModel.SelectedTab = tab;
         e.Handled = true;
     }
 
-    private ListBoxItem? FindTabContainer(DependencyObject? source)
+    private int GetTabDestination(ListBox list, DragEventArgs e, BrowserTabViewModel tab)
     {
-        while (source is not null && !ReferenceEquals(source, TabsList))
+        var insertionIndex = ViewModel.WorkspaceTabs.Count;
+        if (FindTabContainer(list, e.OriginalSource as DependencyObject) is { } targetContainer && targetContainer.DataContext is BrowserTabViewModel target)
         {
-            if (source is ListBoxItem item && ItemsControl.ItemsControlFromItemContainer(item) == TabsList) return item;
+            insertionIndex = ViewModel.WorkspaceTabs.IndexOf(target);
+            var pointer = e.GetPosition(targetContainer);
+            var after = ReferenceEquals(list, VerticalTabsList) ? pointer.Y > targetContainer.ActualHeight / 2 : pointer.X > targetContainer.ActualWidth / 2;
+            if (after) insertionIndex++;
+        }
+        var sourceIndex = ViewModel.WorkspaceTabs.IndexOf(tab);
+        if (sourceIndex < 0) return -1;
+        if (sourceIndex < insertionIndex) insertionIndex--;
+        return Math.Max(0, Math.Min(insertionIndex, ViewModel.WorkspaceTabs.Count - 1));
+    }
+
+    private void AnimateTabReorder(ListBox list, int oldIndex, int newIndex)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            var vertical = ReferenceEquals(list, VerticalTabsList);
+            var first = Math.Min(oldIndex, newIndex);
+            var last = Math.Max(oldIndex, newIndex);
+            for (var index = first; index <= last; index++)
+            {
+                if (list.ItemContainerGenerator.ContainerFromIndex(index) is not ListBoxItem item) continue;
+                var distance = vertical ? Math.Max(1, item.ActualHeight) : Math.Max(1, item.ActualWidth);
+                var from = index == newIndex ? (oldIndex - newIndex) * distance : oldIndex < newIndex ? distance : -distance;
+                var transform = item.RenderTransform as TranslateTransform ?? new TranslateTransform();
+                item.RenderTransform = transform;
+                var animation = new DoubleAnimation(from, 0, TimeSpan.FromMilliseconds(170))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                };
+                transform.BeginAnimation(vertical ? TranslateTransform.YProperty : TranslateTransform.XProperty, animation, HandoffBehavior.SnapshotAndReplace);
+            }
+        }), System.Windows.Threading.DispatcherPriority.Render);
+    }
+
+    private static ListBoxItem? FindTabContainer(ListBox list, DependencyObject? source)
+    {
+        while (source is not null && !ReferenceEquals(source, list))
+        {
+            if (source is ListBoxItem item && ItemsControl.ItemsControlFromItemContainer(item) == list) return item;
             source = source is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
                 ? System.Windows.Media.VisualTreeHelper.GetParent(source)
                 : LogicalTreeHelper.GetParent(source);
         }
         return null;
+    }
+
+    private void TabContextMenu_Opening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: BrowserTabViewModel tab }) ViewModel.SelectedTab = tab;
+    }
+
+    private void WorkspaceButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is UIElement target) WorkspacePopup.PlacementTarget = target;
+        WorkspacePopup.IsOpen = true;
+    }
+
+    private void AddWorkspace_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.CreateWorkspaceCommand.Execute(NewWorkspaceNameBox.Text);
+        NewWorkspaceNameBox.Clear();
     }
 
     private void AddressBox_KeyDown(object sender, KeyEventArgs e)
@@ -420,6 +495,10 @@ public partial class MainWindow : Window
         // Clear last, after navigation has stopped and background history loading
         // has settled, so nothing can recreate data after the privacy operation.
         await IgnoreShutdownError(ViewModel.Services.Privacy.ClearOnExitAsync);
+        // Dispose every controller and wait for WebView2 child processes before
+        // the window disappears. This gives portable drives a clear safe-eject
+        // boundary instead of leaving Chromium file handles behind.
+        await IgnoreShutdownError(ViewModel.Services.CompleteShutdownAsync);
         _shutdownComplete = true;
         Close();
     }

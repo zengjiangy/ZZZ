@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ZZZ.Services;
 using ZZZ.Configuration;
+using ZZZ.Models;
 
 namespace ZZZ.ViewModels;
 
@@ -15,12 +16,20 @@ public partial class MainViewModel : ObservableObject
     private readonly DispatcherTimer _sleepTimer;
     private readonly DispatcherTimer _sessionJournalTimer;
     private readonly DispatcherTimer? _sessionRestoreTimer;
-    private IReadOnlyList<string> _pendingSessionUrls = [];
+    private IReadOnlyList<WorkspaceTabSnapshot> _pendingSessionTabs = [];
     private bool _sessionJournalPaused;
     public ObservableCollection<BrowserTabViewModel> Tabs => _services.Tabs.Items;
+    public ObservableCollection<BrowserTabViewModel> WorkspaceTabs { get; } = [];
+    public ObservableCollection<WorkspaceDefinition> Workspaces => _services.Workspaces.Items;
     [ObservableProperty] private BrowserTabViewModel? selectedTab;
+    [ObservableProperty] private WorkspaceDefinition? activeWorkspace;
     [ObservableProperty] private bool isCurrentPageBookmarked;
-    public bool ShowSessionRestorePrompt => _pendingSessionUrls.Count > 0 && SelectedTab?.IsPrivate != true;
+    public bool ShowSessionRestorePrompt => _pendingSessionTabs.Count > 0 && SelectedTab?.IsPrivate != true;
+    public bool ShowHorizontalTabBar => _services.Settings.Current.Ui.ShowTabBar && !_services.Settings.Current.Ui.UseVerticalTabs;
+    public bool ShowVerticalTabBar => _services.Settings.Current.Ui.ShowTabBar && _services.Settings.Current.Ui.UseVerticalTabs;
+    public bool AreVerticalTabsExpanded => !_services.Settings.Current.Ui.VerticalTabsCollapsed;
+    public double VerticalTabBarWidth => _services.Settings.Current.Ui.VerticalTabsCollapsed ? 58 : 250;
+    public bool CanDeleteWorkspace => Workspaces.Count > 1;
     public AppServices Services => _services;
 
     public MainViewModel(AppServices services, IEnumerable<string>? launchUrls = null)
@@ -28,6 +37,7 @@ public partial class MainViewModel : ObservableObject
         _services = services;
         _services.Bookmarks.Changed += (_, _) => UpdateBookmarkState();
         _services.Browser.NewTabRequested += (url, isPrivate) => CreateTab(url, isPrivate);
+        activeWorkspace = _services.Workspaces.Active;
         _sessionJournalTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         _sessionJournalTimer.Tick += async (_, _) =>
         {
@@ -37,16 +47,17 @@ public partial class MainViewModel : ObservableObject
         };
         Tabs.CollectionChanged += Tabs_CollectionChanged;
         var suppliedUrls = launchUrls?.Where(x => Uri.TryCreate(x, UriKind.Absolute, out _)).ToArray() ?? [];
-        _pendingSessionUrls = _services.Settings.Current.Browser.RestoreLastSession
-            ? _services.Session.Urls.Where(x => !BrowserHome.IsStartPage(x)).Take(50).ToArray()
-            : [];
+        _pendingSessionTabs = _services.Settings.Current.Browser.RestoreLastSession ? _services.Workspaces.RestoreTabs() : [];
+        if (_pendingSessionTabs.Count == 0 && _services.Settings.Current.Browser.RestoreLastSession)
+            _pendingSessionTabs = _services.Session.Urls.Where(x => !BrowserHome.IsStartPage(x)).Take(50)
+                .Select(x => new WorkspaceTabSnapshot { WorkspaceId = activeWorkspace.Id, Url = x }).ToArray();
         // Keep the previous durable snapshot intact while the 10-second restore
         // decision is pending. A crash during the prompt can therefore offer it
         // again instead of replacing it with an empty start page.
-        _sessionJournalPaused = _pendingSessionUrls.Count > 0;
+        _sessionJournalPaused = _pendingSessionTabs.Count > 0;
         foreach (var url in suppliedUrls) CreateTab(url);
         if (Tabs.Count == 0) CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current));
-        if (_pendingSessionUrls.Count > 0)
+        if (_pendingSessionTabs.Count > 0)
         {
             _sessionRestoreTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
             _sessionRestoreTimer.Tick += (_, _) => DismissPreviousSession();
@@ -56,6 +67,16 @@ public partial class MainViewModel : ObservableObject
         _sleepTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _sleepTimer.Tick += (_, _) => SleepIdleTabs();
         _sleepTimer.Start();
+    }
+
+    partial void OnActiveWorkspaceChanged(WorkspaceDefinition? oldValue, WorkspaceDefinition? newValue)
+    {
+        if (newValue is null || ReferenceEquals(oldValue, newValue)) return;
+        _services.Workspaces.SetActive(newValue.Id);
+        RefreshWorkspaceTabs();
+        if (WorkspaceTabs.Count == 0) CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current), workspaceId: newValue.Id);
+        else if (SelectedTab is null || !string.Equals(SelectedTab.WorkspaceId, newValue.Id, StringComparison.OrdinalIgnoreCase)) SelectedTab = WorkspaceTabs[0];
+        QueueSessionSnapshot();
     }
 
     partial void OnSelectedTabChanged(BrowserTabViewModel? oldValue, BrowserTabViewModel? newValue)
@@ -82,6 +103,7 @@ public partial class MainViewModel : ObservableObject
             foreach (BrowserTabViewModel tab in e.OldItems) tab.PropertyChanged -= Tab_SessionPropertyChanged;
         if (e.NewItems is not null)
             foreach (BrowserTabViewModel tab in e.NewItems) tab.PropertyChanged += Tab_SessionPropertyChanged;
+        RefreshWorkspaceTabs();
         var changedPublicTab = e.Action == NotifyCollectionChangedAction.Reset ||
             (e.OldItems?.Cast<BrowserTabViewModel>().Any(x => !x.IsPrivate) ?? false) ||
             (e.NewItems?.Cast<BrowserTabViewModel>().Any(x => !x.IsPrivate) ?? false);
@@ -90,7 +112,7 @@ public partial class MainViewModel : ObservableObject
 
     private void Tab_SessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is BrowserTabViewModel { IsPrivate: false } && e.PropertyName == nameof(BrowserTabViewModel.Url)) QueueSessionSnapshot();
+        if (sender is BrowserTabViewModel { IsPrivate: false } && e.PropertyName is nameof(BrowserTabViewModel.Url) or nameof(BrowserTabViewModel.WorkspaceId)) QueueSessionSnapshot();
     }
 
     private void QueueSessionSnapshot()
@@ -116,20 +138,25 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void CreatePrivateTab() => CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current), true);
 
-    public void CreateTab(string url, bool isPrivate = false)
+    public void CreateTab(string url, bool isPrivate = false, string? workspaceId = null)
     {
-        SelectedTab = _services.Tabs.Create(url, isPrivate);
+        var target = _services.Workspaces.Find(workspaceId) ?? ActiveWorkspace ?? _services.Workspaces.Active;
+        var tab = _services.Tabs.Create(url, isPrivate, target.Id);
+        if (string.Equals(target.Id, ActiveWorkspace?.Id, StringComparison.OrdinalIgnoreCase)) SelectedTab = tab;
     }
 
     [RelayCommand]
     private void RestorePreviousSession()
     {
-        var urls = _pendingSessionUrls;
-        if (urls.Count == 0) return;
+        var tabs = _pendingSessionTabs;
+        if (tabs.Count == 0) return;
         var placeholder = Tabs.Count == 1 && Tabs[0].IsStartPage && !Tabs[0].IsPrivate ? Tabs[0] : null;
         ClearPendingSession();
         if (placeholder is not null) _services.Tabs.Close(placeholder);
-        foreach (var url in urls) CreateTab(url);
+        foreach (var tab in tabs) CreateTab(tab.Url, workspaceId: tab.WorkspaceId);
+        ActiveWorkspace = _services.Workspaces.Find(_services.Workspaces.ActiveWorkspaceId) ?? Workspaces[0];
+        RefreshWorkspaceTabs();
+        SelectedTab = WorkspaceTabs.FirstOrDefault();
     }
 
     [RelayCommand]
@@ -138,7 +165,7 @@ public partial class MainViewModel : ObservableObject
     private void ClearPendingSession()
     {
         _sessionRestoreTimer?.Stop();
-        _pendingSessionUrls = [];
+        _pendingSessionTabs = [];
         _sessionJournalPaused = false;
         OnPropertyChanged(nameof(ShowSessionRestorePrompt));
         QueueSessionSnapshot();
@@ -150,13 +177,15 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void CloseTab(BrowserTabViewModel tab)
     {
-        var index = _services.Tabs.Close(tab);
-        if (Tabs.Count == 0) { CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current)); return; }
-        if (ReferenceEquals(SelectedTab, tab)) SelectedTab = Tabs[Math.Min(index, Tabs.Count - 1)];
+        var index = WorkspaceTabs.IndexOf(tab);
+        var wasSelected = ReferenceEquals(SelectedTab, tab);
+        _services.Tabs.Close(tab);
+        if (WorkspaceTabs.Count == 0) { CreateTab(BrowserHome.GetHomeUrl(_services.Settings.Current)); return; }
+        if (wasSelected) SelectedTab = WorkspaceTabs[Math.Max(0, Math.Min(index, WorkspaceTabs.Count - 1))];
     }
 
     [RelayCommand]
-    private void DuplicateTab(BrowserTabViewModel tab) => CreateTab(tab.Url, tab.IsPrivate);
+    private void DuplicateTab(BrowserTabViewModel tab) => CreateTab(tab.Url, tab.IsPrivate, tab.WorkspaceId);
 
     [RelayCommand]
     private void CloseOthers(BrowserTabViewModel tab)
@@ -170,6 +199,59 @@ public partial class MainViewModel : ObservableObject
     {
         _services.Tabs.CloseToRight(tab);
         SelectedTab = tab;
+    }
+
+    [RelayCommand]
+    private void SwitchWorkspace(WorkspaceDefinition workspace) => ActiveWorkspace = workspace;
+
+    [RelayCommand]
+    private async Task CreateWorkspaceAsync(string? name)
+    {
+        var workspace = _services.Workspaces.Create(name);
+        ActiveWorkspace = workspace;
+        OnPropertyChanged(nameof(CanDeleteWorkspace));
+        await _services.Workspaces.SaveMetadataAsync();
+    }
+
+    [RelayCommand]
+    private async Task SaveWorkspaceAsync()
+    {
+        if (ActiveWorkspace is null) return;
+        var name = ActiveWorkspace.Name.Trim();
+        ActiveWorkspace.Name = string.IsNullOrWhiteSpace(name) ? LocalizationService.Text("Workspace") : name.Length > 40 ? name.Substring(0, 40) : name;
+        await _services.Workspaces.SaveMetadataAsync();
+    }
+
+    [RelayCommand]
+    private async Task DeleteWorkspaceAsync()
+    {
+        if (ActiveWorkspace is null || Workspaces.Count <= 1) return;
+        var removed = ActiveWorkspace;
+        foreach (var tab in Tabs.Where(x => string.Equals(x.WorkspaceId, removed.Id, StringComparison.OrdinalIgnoreCase)).ToArray()) _services.Tabs.Close(tab);
+        if (!_services.Workspaces.Remove(removed)) return;
+        ActiveWorkspace = _services.Workspaces.Active;
+        OnPropertyChanged(nameof(CanDeleteWorkspace));
+        await _services.Workspaces.SaveMetadataAsync();
+    }
+
+    [RelayCommand]
+    private void MoveSelectedTabToWorkspace(WorkspaceDefinition workspace)
+    {
+        if (SelectedTab is null || workspace is null) return;
+        var tab = SelectedTab;
+        _services.Tabs.MoveToWorkspace(tab, workspace.Id);
+        ActiveWorkspace = workspace;
+        RefreshWorkspaceTabs();
+        SelectedTab = tab;
+        QueueSessionSnapshot();
+    }
+
+    [RelayCommand]
+    private async Task ToggleVerticalTabsCollapsedAsync()
+    {
+        _services.Settings.Current.Ui.VerticalTabsCollapsed = !_services.Settings.Current.Ui.VerticalTabsCollapsed;
+        NotifyTabLayout();
+        await _services.Settings.SaveAsync();
     }
 
     [RelayCommand]
@@ -189,10 +271,11 @@ public partial class MainViewModel : ObservableObject
         {
             _sessionJournalTimer.Stop();
             ClearPendingSession();
-            await _services.Session.ClearAsync();
+            await Task.WhenAll(_services.Session.ClearAsync(), _services.Workspaces.ClearTabsAsync());
         }
         await _services.Browser.ApplyCurrentSettingsAsync(reloadPages: true);
         foreach (var tab in Tabs.Where(x => x.IsStartPage)) tab.RefreshStartPage();
+        NotifyTabLayout();
         OnPropertyChanged(nameof(Services));
         OnPropertyChanged(string.Empty);
     }
@@ -208,7 +291,9 @@ public partial class MainViewModel : ObservableObject
     private async Task SaveSessionSnapshotAsync()
     {
         if (!_services.Settings.Current.Browser.RestoreLastSession) return;
-        await _services.Session.SaveAsync(Tabs.Where(x => !x.IsPrivate).Select(x => (x.Url, false)));
+        await Task.WhenAll(
+            _services.Session.SaveAsync(Tabs.Where(x => !x.IsPrivate).Select(x => (x.Url, false))),
+            _services.Workspaces.SaveSnapshotAsync(Tabs.Select(x => (x.Url, x.IsPrivate, x.WorkspaceId)), ActiveWorkspace?.Id ?? _services.Workspaces.ActiveWorkspaceId));
     }
 
     public async Task FlushSessionJournalAsync()
@@ -219,8 +304,27 @@ public partial class MainViewModel : ObservableObject
         Tabs.CollectionChanged -= Tabs_CollectionChanged;
         foreach (var tab in Tabs) tab.PropertyChanged -= Tab_SessionPropertyChanged;
         if (_services.Settings.Current.Browser.RestoreLastSession)
-            await _services.Session.SaveAsync(Tabs.Where(x => !x.IsPrivate).Select(x => (x.Url, false)));
+            await Task.WhenAll(
+                _services.Session.SaveAsync(Tabs.Where(x => !x.IsPrivate).Select(x => (x.Url, false))),
+                _services.Workspaces.SaveSnapshotAsync(Tabs.Select(x => (x.Url, x.IsPrivate, x.WorkspaceId)), ActiveWorkspace?.Id ?? _services.Workspaces.ActiveWorkspaceId));
         else
-            await _services.Session.ClearAsync();
+            await Task.WhenAll(_services.Session.ClearAsync(), _services.Workspaces.ClearTabsAsync());
+    }
+
+    private void RefreshWorkspaceTabs()
+    {
+        var activeId = ActiveWorkspace?.Id;
+        var desired = SelectedTab is not null && string.Equals(SelectedTab.WorkspaceId, activeId, StringComparison.OrdinalIgnoreCase) ? SelectedTab : null;
+        WorkspaceTabs.Clear();
+        foreach (var tab in Tabs.Where(x => string.Equals(x.WorkspaceId, activeId, StringComparison.OrdinalIgnoreCase))) WorkspaceTabs.Add(tab);
+        if (desired is not null && WorkspaceTabs.Contains(desired)) SelectedTab = desired;
+    }
+
+    private void NotifyTabLayout()
+    {
+        OnPropertyChanged(nameof(ShowHorizontalTabBar));
+        OnPropertyChanged(nameof(ShowVerticalTabBar));
+        OnPropertyChanged(nameof(AreVerticalTabsExpanded));
+        OnPropertyChanged(nameof(VerticalTabBarWidth));
     }
 }

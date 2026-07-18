@@ -23,6 +23,7 @@ var sessionSnapshot = SessionService.BuildSnapshot(new (string Url, bool IsPriva
 });
 Check(sessionSnapshot.SequenceEqual(new[] { "https://public.example/", "https://public.example/" }), "session snapshots exclude private tabs, invalid URLs, and the start page while preserving tab order and duplicates");
 await CheckSessionJournalAsync();
+await CheckProtectedBrowserDataAsync();
 
 try
 {
@@ -36,6 +37,13 @@ try
     var thirdTab = tabServices.Tabs.Create("https://third.example/");
     tabServices.Tabs.Move(firstTab, 2);
     Check(tabServices.Tabs.Items.SequenceEqual(new[] { secondTab, thirdTab, firstTab }), "tab service preserves drag-and-drop reorder destinations");
+    var research = tabServices.Workspaces.Create("Research");
+    var researchFirst = tabServices.Tabs.Create("https://research-one.example/", workspaceId: research.Id);
+    var researchSecond = tabServices.Tabs.Create("https://research-two.example/", workspaceId: research.Id);
+    tabServices.Tabs.MoveWithinWorkspace(researchFirst, 1);
+    Check(tabServices.Tabs.Items.Where(x => x.WorkspaceId == research.Id).SequenceEqual(new[] { researchSecond, researchFirst }), "workspace tab reorder preserves the visible workspace order");
+    tabServices.Tabs.MoveToWorkspace(firstTab, research.Id);
+    Check(firstTab.WorkspaceId == research.Id && tabServices.Tabs.Items.Where(x => x.WorkspaceId == research.Id).Last() == firstTab, "tabs move between workspaces without being closed");
 }
 catch (Exception ex) { Check(false, $"closed-tab lifetime test threw {ex.GetType().FullName}: {ex.Message}"); }
 
@@ -279,6 +287,85 @@ async Task CheckSessionJournalAsync()
 
         await recovered.ClearAsync();
         Check(!File.Exists(AppPaths.Session) && !Directory.EnumerateFiles(isolatedRoot, "session.json*.tmp").Any(), "disabling session recording clears journal and temporary files");
+    }
+    finally
+    {
+        rootField.SetValue(null, originalRoot);
+        try { if (Directory.Exists(isolatedRoot)) Directory.Delete(isolatedRoot, true); } catch { }
+    }
+}
+
+async Task CheckProtectedBrowserDataAsync()
+{
+    var rootField = typeof(AppPaths).GetField("<Root>k__BackingField", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+    if (rootField is null)
+    {
+        Check(false, "protected browser data tests can isolate the data directory");
+        return;
+    }
+
+    var originalRoot = (string)rootField.GetValue(null)!;
+    var isolatedRoot = Path.Combine(Path.GetTempPath(), "ZZZ.ProtectedDataTests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        rootField.SetValue(null, isolatedRoot);
+        Directory.CreateDirectory(isolatedRoot);
+
+        var legacyBookmarks = new List<Bookmark>
+        {
+            new() { Title = "Private bookmark", Url = "https://bookmark-secret.example/" }
+        };
+        File.WriteAllText(AppPaths.LegacyBookmarks, System.Text.Json.JsonSerializer.Serialize(legacyBookmarks));
+        var bookmarks = new BookmarkService();
+        await bookmarks.LoadAsync();
+        Check(bookmarks.Items.Single().Url == "https://bookmark-secret.example/", "legacy plaintext bookmarks migrate without data loss");
+        Check(File.Exists(AppPaths.Bookmarks) && !File.Exists(AppPaths.LegacyBookmarks), "bookmark migration replaces the plaintext JSON file");
+        Check(!System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(AppPaths.Bookmarks)).Contains("bookmark-secret.example"), "bookmark URLs are not readable in the protected file");
+        var reloadedBookmarks = new BookmarkService();
+        await reloadedBookmarks.LoadAsync();
+        Check(reloadedBookmarks.Items.Single().Title == "Private bookmark", "DPAPI-protected bookmarks reload for the current Windows user");
+
+        var legacyHistory = new List<HistoryEntry>
+        {
+            new() { Title = "Private history", Url = "https://history-secret.example/" }
+        };
+        File.WriteAllText(AppPaths.LegacyHistory, System.Text.Json.JsonSerializer.Serialize(legacyHistory));
+        var history = new HistoryService();
+        await history.LoadAsync();
+        Check(history.Items.Single().Url == "https://history-secret.example/", "legacy plaintext history migrates without data loss");
+        Check(File.Exists(AppPaths.History) && !File.Exists(AppPaths.LegacyHistory), "history migration replaces the plaintext JSON file");
+        Check(!System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(AppPaths.History)).Contains("history-secret.example"), "history URLs are not readable in the protected file");
+        var reloadedHistory = new HistoryService();
+        await reloadedHistory.LoadAsync();
+        Check(reloadedHistory.Items.Single().Title == "Private history", "DPAPI-protected history reloads for the current Windows user");
+
+        var workspaces = new WorkspaceService();
+        await workspaces.LoadAsync();
+        var defaultWorkspace = workspaces.Active;
+        var research = workspaces.Create("Research");
+        await workspaces.SaveSnapshotAsync(new (string Url, bool IsPrivate, string WorkspaceId)[]
+        {
+            ("https://default-workspace-secret.example/", false, defaultWorkspace.Id),
+            ("https://research-workspace-secret.example/", false, research.Id),
+            ("https://private-workspace-secret.example/", true, research.Id),
+            (BrowserHome.StartPageUrl, false, research.Id)
+        }, research.Id);
+        Check(!System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(AppPaths.Workspaces)).Contains("workspace-secret.example"), "workspace tab URLs are DPAPI-protected at rest");
+        var reloadedWorkspaces = new WorkspaceService();
+        await reloadedWorkspaces.LoadAsync();
+        var restoredTabs = reloadedWorkspaces.RestoreTabs();
+        Check(reloadedWorkspaces.Items.Count == 2 && reloadedWorkspaces.Active.Name == "Research", "workspace names and active workspace persist");
+        Check(restoredTabs.Count == 2 && restoredTabs.Any(x => x.WorkspaceId == defaultWorkspace.Id) && restoredTabs.Any(x => x.WorkspaceId == research.Id), "workspace restore keeps public tabs grouped and excludes private or start-page tabs");
+
+        var faviconBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        var faviconCache = new FaviconCacheService();
+        using (var faviconStream = new MemoryStream(faviconBytes, false))
+            await faviconCache.CaptureAsync("https://favicon-secret.example/path", faviconStream, persist: true);
+        var faviconFile = Directory.GetFiles(AppPaths.Favicons, "*.dat").Single();
+        Check(!File.ReadAllBytes(faviconFile).Take(8).SequenceEqual(faviconBytes.Take(8)), "favicon cache files are DPAPI-protected instead of storing raw PNG data");
+        Check(new FaviconCacheService().GetCached("https://favicon-secret.example/other") is not null, "protected favicon cache reloads by site origin for bookmarks and history");
+
+        Check(AppPaths.PrivateWebViewRoot.StartsWith(isolatedRoot, StringComparison.OrdinalIgnoreCase), "private WebView data follows the selected data root");
     }
     finally
     {

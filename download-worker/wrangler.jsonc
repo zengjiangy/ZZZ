@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zzz-download-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-16",
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "download.zzz.campusphere.ltd",
+      "custom_domain": true
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "RELEASES",
+      "bucket_name": "zzz-releases"
+    }
+  ]
+}

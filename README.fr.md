@@ -2,9 +2,11 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [한국어](README.ko.md) | [繁體中文](README.zh-TW.md)
 
+Site officiel : [zzz.campusphere.ltd](https://zzz.campusphere.ltd/)
+
 ZZZ est un navigateur Windows léger et open source, développé avec .NET Framework 4.8, WPF et Microsoft WebView2. Il utilise le runtime WebView2 installé sur le système au lieu d’intégrer Chromium. Il peut également conserver ses données à côté de l’exécutable pour une utilisation portable.
 
-Version actuelle : **2.0.6**
+Version actuelle : **2.1.5**
 
 ## Téléchargement et configuration requise
 
@@ -12,15 +14,15 @@ Téléchargez la dernière version depuis [GitHub Releases](https://github.com/z
 
 | Fichier | Plateforme |
 |---|---|
-| `ZZZ-v2.0.6-win-x64.exe` | Version native Windows x64 |
-| `ZZZ-v2.0.6-win-x86.exe` | Version 32 bits pour Windows 10 x86 et Windows 10 on Arm via émulation x86 |
-| `ZZZ-v2.0.6-win-arm64.exe` | Version native Windows ARM64 |
+| `ZZZ-v2.1.5-win-x64.exe` | Version native Windows x64 |
+| `ZZZ-v2.1.5-win-x86.exe` | Version 32 bits pour Windows 10 x86 et Windows 10 on Arm via émulation x86 |
+| `ZZZ-v2.1.5-win-arm64.exe` | Version native Windows ARM64 |
 
 Aucune installation n’est nécessaire. ZZZ requiert Windows 10 ou Windows 11, .NET Framework 4.8 et le [runtime Microsoft Edge WebView2](https://developer.microsoft.com/microsoft-edge/webview2/).
 
 ## Fonctionnalités principales
 
-- Interface multilingue, navigation par onglets, restauration des pages récemment fermées et affichage partagé horizontal ou vertical
+- Onglets horizontaux ou verticaux repliables avec icônes de site et réorganisation animée, ainsi que des espaces de travail persistants inspirés d’Edge
 - Barre unifiée d’adresse et de recherche avec correspondances dans l’historique et suggestions en direct
 - Favoris groupés et modifiables, avec importation et exportation au format HTML
 - Page de démarrage native et légère, personnalisable avec une couleur, une image ou un GIF
