@@ -2,9 +2,11 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [한국어](README.ko.md) | [繁體中文](README.zh-TW.md)
 
+Offizielle Website: [zzz.campusphere.ltd](https://zzz.campusphere.ltd/)
+
 ZZZ ist ein schlanker, quelloffener Browser für Windows, der auf .NET Framework 4.8, WPF und Microsoft WebView2 basiert. Er verwendet die auf dem System installierte WebView2 Runtime, statt Chromium mitzuliefern. Für den portablen Einsatz können die Browserdaten neben der Programmdatei gespeichert werden.
 
-Aktuelle Version: **2.0.6**
+Aktuelle Version: **2.1.0**
 
 ## Download und Voraussetzungen
 
@@ -12,9 +14,9 @@ Die aktuelle Version steht unter [GitHub Releases](https://github.com/zengjiangy
 
 | Datei | Plattform |
 |---|---|
-| `ZZZ-v2.0.6-win-x64.exe` | Native Windows-x64-Version |
-| `ZZZ-v2.0.6-win-x86.exe` | 32-Bit-Version für Windows 10 x86 und Windows 10 on Arm per x86-Emulation |
-| `ZZZ-v2.0.6-win-arm64.exe` | Native Windows-ARM64-Version |
+| `ZZZ-v2.1.0-win-x64.exe` | Native Windows-x64-Version |
+| `ZZZ-v2.1.0-win-x86.exe` | 32-Bit-Version für Windows 10 x86 und Windows 10 on Arm per x86-Emulation |
+| `ZZZ-v2.1.0-win-arm64.exe` | Native Windows-ARM64-Version |
 
 Eine Installation ist nicht erforderlich. Benötigt werden Windows 10 oder Windows 11, .NET Framework 4.8 und die [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
 

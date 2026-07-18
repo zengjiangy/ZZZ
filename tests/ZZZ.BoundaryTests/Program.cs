@@ -23,6 +23,7 @@ var sessionSnapshot = SessionService.BuildSnapshot(new (string Url, bool IsPriva
 });
 Check(sessionSnapshot.SequenceEqual(new[] { "https://public.example/", "https://public.example/" }), "session snapshots exclude private tabs, invalid URLs, and the start page while preserving tab order and duplicates");
 await CheckSessionJournalAsync();
+await CheckProtectedBrowserDataAsync();
 
 try
 {
@@ -279,6 +280,59 @@ async Task CheckSessionJournalAsync()
 
         await recovered.ClearAsync();
         Check(!File.Exists(AppPaths.Session) && !Directory.EnumerateFiles(isolatedRoot, "session.json*.tmp").Any(), "disabling session recording clears journal and temporary files");
+    }
+    finally
+    {
+        rootField.SetValue(null, originalRoot);
+        try { if (Directory.Exists(isolatedRoot)) Directory.Delete(isolatedRoot, true); } catch { }
+    }
+}
+
+async Task CheckProtectedBrowserDataAsync()
+{
+    var rootField = typeof(AppPaths).GetField("<Root>k__BackingField", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+    if (rootField is null)
+    {
+        Check(false, "protected browser data tests can isolate the data directory");
+        return;
+    }
+
+    var originalRoot = (string)rootField.GetValue(null)!;
+    var isolatedRoot = Path.Combine(Path.GetTempPath(), "ZZZ.ProtectedDataTests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        rootField.SetValue(null, isolatedRoot);
+        Directory.CreateDirectory(isolatedRoot);
+
+        var legacyBookmarks = new List<Bookmark>
+        {
+            new() { Title = "Private bookmark", Url = "https://bookmark-secret.example/" }
+        };
+        File.WriteAllText(AppPaths.LegacyBookmarks, System.Text.Json.JsonSerializer.Serialize(legacyBookmarks));
+        var bookmarks = new BookmarkService();
+        await bookmarks.LoadAsync();
+        Check(bookmarks.Items.Single().Url == "https://bookmark-secret.example/", "legacy plaintext bookmarks migrate without data loss");
+        Check(File.Exists(AppPaths.Bookmarks) && !File.Exists(AppPaths.LegacyBookmarks), "bookmark migration replaces the plaintext JSON file");
+        Check(!System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(AppPaths.Bookmarks)).Contains("bookmark-secret.example"), "bookmark URLs are not readable in the protected file");
+        var reloadedBookmarks = new BookmarkService();
+        await reloadedBookmarks.LoadAsync();
+        Check(reloadedBookmarks.Items.Single().Title == "Private bookmark", "DPAPI-protected bookmarks reload for the current Windows user");
+
+        var legacyHistory = new List<HistoryEntry>
+        {
+            new() { Title = "Private history", Url = "https://history-secret.example/" }
+        };
+        File.WriteAllText(AppPaths.LegacyHistory, System.Text.Json.JsonSerializer.Serialize(legacyHistory));
+        var history = new HistoryService();
+        await history.LoadAsync();
+        Check(history.Items.Single().Url == "https://history-secret.example/", "legacy plaintext history migrates without data loss");
+        Check(File.Exists(AppPaths.History) && !File.Exists(AppPaths.LegacyHistory), "history migration replaces the plaintext JSON file");
+        Check(!System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(AppPaths.History)).Contains("history-secret.example"), "history URLs are not readable in the protected file");
+        var reloadedHistory = new HistoryService();
+        await reloadedHistory.LoadAsync();
+        Check(reloadedHistory.Items.Single().Title == "Private history", "DPAPI-protected history reloads for the current Windows user");
+
+        Check(AppPaths.PrivateWebViewRoot.StartsWith(isolatedRoot, StringComparison.OrdinalIgnoreCase), "private WebView data follows the selected data root");
     }
     finally
     {

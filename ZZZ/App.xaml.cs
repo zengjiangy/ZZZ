@@ -17,6 +17,12 @@ public partial class App : Application
         // treating its successful close as "last window closed" before the
         // actual browser window has been created.
         ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
+        if (await PrivateDataGuard.TryRunCleanupWorkerAsync(e.Args))
+        {
+            Shutdown();
+            return;
+        }
+        PrivateDataGuard.CleanupStaleWorkerCopies();
         AppPaths.Initialize();
         _singleInstance = new SingleInstanceService();
         if (!_singleInstance.IsPrimary)

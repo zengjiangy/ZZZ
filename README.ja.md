@@ -2,9 +2,11 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [한국어](README.ko.md) | [繁體中文](README.zh-TW.md)
 
+公式サイト：[zzz.campusphere.ltd](https://zzz.campusphere.ltd/)
+
 ZZZ は、.NET Framework 4.8、WPF、Microsoft WebView2 で構築された、Windows 向けの軽量なオープンソースブラウザーです。Chromium を同梱せず、システムにインストールされた WebView2 Runtime を利用します。ブラウザーデータを実行ファイルと同じ場所に保存するポータブル運用にも対応しています。
 
-現在のバージョン：**2.0.6**
+現在のバージョン：**2.1.0**
 
 ## ダウンロードと動作環境
 
@@ -12,9 +14,9 @@ ZZZ は、.NET Framework 4.8、WPF、Microsoft WebView2 で構築された、Win
 
 | ファイル | 対応プラットフォーム |
 |---|---|
-| `ZZZ-v2.0.6-win-x64.exe` | Windows x64 ネイティブ版 |
-| `ZZZ-v2.0.6-win-x86.exe` | Windows 10 x86 向け32ビット互換版（Windows 10 on Armではx86エミュレーション） |
-| `ZZZ-v2.0.6-win-arm64.exe` | Windows ARM64 ネイティブ版 |
+| `ZZZ-v2.1.0-win-x64.exe` | Windows x64 ネイティブ版 |
+| `ZZZ-v2.1.0-win-x86.exe` | Windows 10 x86 向け32ビット互換版（Windows 10 on Armではx86エミュレーション） |
+| `ZZZ-v2.1.0-win-arm64.exe` | Windows ARM64 ネイティブ版 |
 
 インストールは不要です。Windows 10 または Windows 11、.NET Framework 4.8、および [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) が必要です。
 

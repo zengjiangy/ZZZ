@@ -420,6 +420,10 @@ public partial class MainWindow : Window
         // Clear last, after navigation has stopped and background history loading
         // has settled, so nothing can recreate data after the privacy operation.
         await IgnoreShutdownError(ViewModel.Services.Privacy.ClearOnExitAsync);
+        // Dispose every controller and wait for WebView2 child processes before
+        // the window disappears. This gives portable drives a clear safe-eject
+        // boundary instead of leaving Chromium file handles behind.
+        await IgnoreShutdownError(ViewModel.Services.CompleteShutdownAsync);
         _shutdownComplete = true;
         Close();
     }
