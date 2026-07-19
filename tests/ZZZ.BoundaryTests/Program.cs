@@ -376,6 +376,21 @@ async Task CheckProtectedBrowserDataAsync()
         Check(new FaviconCacheService().GetCached("http://favicon-secret.example/other") is null, "favicon cache is isolated by full origin instead of leaking icons across HTTP and HTTPS sites");
         Check(FaviconCacheService.FallbackLetter("Example", "https://www.example.com/") == "E", "missing favicons use a restrained site letter instead of a decorative fake icon");
 
+        var smallRed = Enumerable.Range(0, 16 * 16).SelectMany(_ => new byte[] { 0, 0, 255, 255 }).ToArray();
+        var largeBlue = Enumerable.Range(0, 64 * 64).SelectMany(_ => new byte[] { 255, 0, 0, 255 }).ToArray();
+        var smallFrame = System.Windows.Media.Imaging.BitmapSource.Create(16, 16, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, smallRed, 16 * 4);
+        var largeFrame = System.Windows.Media.Imaging.BitmapSource.Create(64, 64, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, largeBlue, 64 * 4);
+        var multiFrameEncoder = new System.Windows.Media.Imaging.TiffBitmapEncoder();
+        multiFrameEncoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(smallFrame));
+        multiFrameEncoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(largeFrame));
+        using var multiFrameStream = new MemoryStream();
+        multiFrameEncoder.Save(multiFrameStream);
+        multiFrameStream.Position = 0;
+        var preferredFavicon = await faviconCache.CaptureAsync("https://multiframe-favicon.example/", multiFrameStream, persist: false) as System.Windows.Media.Imaging.BitmapSource;
+        var preferredPixels = new byte[preferredFavicon?.PixelWidth * preferredFavicon?.Format.BitsPerPixel / 8 ?? 0];
+        preferredFavicon?.CopyPixels(new System.Windows.Int32Rect(0, 0, preferredFavicon.PixelWidth, 1), preferredPixels, preferredPixels.Length, 0);
+        Check(preferredPixels.Length >= 4 && preferredPixels[0] > preferredPixels[2], "multi-frame favicons prefer the largest high-resolution frame instead of the first legacy frame");
+
         Check(AppPaths.PrivateWebViewRoot.StartsWith(isolatedRoot, StringComparison.OrdinalIgnoreCase), "private WebView data follows the selected data root");
     }
     finally

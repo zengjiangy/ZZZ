@@ -8,8 +8,8 @@ namespace ZZZ.Services;
 
 public sealed class FaviconCacheService
 {
-    private static readonly byte[] Header = [0x5A, 0x46, 0x41, 0x56, 0x02];
-    private static readonly byte[] Entropy = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes("ZZZ.FaviconCache.v2"));
+    private static readonly byte[] Header = [0x5A, 0x46, 0x41, 0x56, 0x03];
+    private static readonly byte[] Entropy = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes("ZZZ.FaviconCache.v3"));
     private static readonly HttpClient Client = CreateClient();
     private readonly Dictionary<string, ImageSource> _memory = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _gate = new();
@@ -125,10 +125,14 @@ public sealed class FaviconCacheService
             using var input = new MemoryStream(source, false);
             var decoder = BitmapDecoder.Create(input, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
             if (decoder.Frames.Count == 0) return [];
-            BitmapSource bitmap = decoder.Frames[0];
-            if (bitmap.PixelWidth < 8 || bitmap.PixelHeight < 8 || bitmap.PixelWidth > 2048 || bitmap.PixelHeight > 2048) return [];
-            var ratio = bitmap.PixelWidth / (double)bitmap.PixelHeight;
-            if (ratio < 0.5 || ratio > 2) return [];
+            // ICO files commonly put a tiny legacy frame first. Prefer the largest valid frame so
+            // transparent, high-DPI site artwork remains crisp after it is reduced for the tab UI.
+            BitmapSource? bitmap = decoder.Frames
+                .Where(IsValidFrame)
+                .OrderByDescending(frame => Math.Min(frame.PixelWidth, frame.PixelHeight))
+                .ThenByDescending(frame => frame.PixelWidth * (long)frame.PixelHeight)
+                .FirstOrDefault();
+            if (bitmap is null) return [];
             var scale = Math.Min(1d, 64d / Math.Max(bitmap.PixelWidth, bitmap.PixelHeight));
             if (scale < 1d) bitmap = new TransformedBitmap(bitmap, new ScaleTransform(scale, scale));
             var encoder = new PngBitmapEncoder();
@@ -138,6 +142,13 @@ public sealed class FaviconCacheService
             return output.Length <= 256 * 1024 ? output.ToArray() : [];
         }
         catch { return []; }
+    }
+
+    private static bool IsValidFrame(BitmapSource bitmap)
+    {
+        if (bitmap.PixelWidth < 8 || bitmap.PixelHeight < 8 || bitmap.PixelWidth > 2048 || bitmap.PixelHeight > 2048) return false;
+        var ratio = bitmap.PixelWidth / (double)bitmap.PixelHeight;
+        return ratio is >= 0.5 and <= 2;
     }
 
     private static ImageSource? Decode(byte[] png)
@@ -197,7 +208,7 @@ public sealed class FaviconCacheService
             AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
         };
         var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) ZZZ/2.2.0 favicon");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) ZZZ/2.2.1 favicon");
         return client;
     }
 
