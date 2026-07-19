@@ -6,7 +6,7 @@ Official website: [zzz.campusphere.ltd](https://zzz.campusphere.ltd/)
 
 ZZZ is a lightweight, open-source browser for Windows, built with .NET Framework 4.8, WPF, and Microsoft WebView2. It uses the system WebView2 Runtime instead of bundling Chromium and can keep all browser data beside the executable for portable use.
 
-Current version: **2.1.5**
+Current version: **2.2.0**
 
 ## Download
 
@@ -14,9 +14,9 @@ Download the latest build from [GitHub Releases](https://github.com/zengjiangy/Z
 
 | File | Platform |
 |---|---|
-| `ZZZ-v2.1.5-win-x64.exe` | Native Windows x64 build |
-| `ZZZ-v2.1.5-win-x86.exe` | 32-bit Windows 10 x86 compatibility build; also runs under x86 emulation on Windows 10 on Arm |
-| `ZZZ-v2.1.5-win-arm64.exe` | Native Windows ARM64 build |
+| `ZZZ-v2.2.0-win-x64.exe` | Native Windows x64 build |
+| `ZZZ-v2.2.0-win-x86.exe` | 32-bit Windows 10 x86 compatibility build; also runs under x86 emulation on Windows 10 on Arm |
+| `ZZZ-v2.2.0-win-arm64.exe` | Native Windows ARM64 build |
 
 No installer is required. Windows 10 or 11, .NET Framework 4.8, and the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) are required.
 
@@ -24,12 +24,15 @@ The WinGet community submission is under review in [microsoft/winget-pkgs#402023
 
 ## Highlights
 
+- A redesigned lightweight visual system with layered surfaces, consistent radii, clearer focus states, and balanced contrast across light, dark, and grayscale modes
+- Refined browser toolbar, address bar, horizontal/vertical tabs, status bar, and native start page, with no additional UI framework or bundled image pack
 - Interface language selection for Simplified Chinese, Traditional Chinese, English, Japanese, Korean, Portuguese, Spanish, Russian, French, and German
 - Horizontal or collapsible vertical tabs with favicons, live drag positioning, and smooth reorder motion
 - Edge-style workspaces with persistent tab groups, create/rename/delete controls, switching, and move-to-workspace actions
 - Event-driven, atomic non-private session journaling with an option to disable all recording
 - Combined address and search box with history matches and live suggestions
 - Grouped bookmarks, bookmark HTML import/export, and a customizable native start page, with cached site icons across tabs, bookmarks, and history
+- Origin-isolated favicon caching prevents stale icons from leaking across navigations; unvisited bookmarks fetch the target site favicon directly and fall back to a plain site initial when none is trustworthy
 - Per-pane zoom, in-page find, printing, full-page PDF, and MHT archive export
 - F9 reading mode, application-wide grayscale mode, editable bookmark names, and a privacy-conscious About page
 - A concise first-run terms prompt shown before any web process starts; acceptance is stored only in local settings

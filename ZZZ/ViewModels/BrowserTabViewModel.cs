@@ -24,6 +24,7 @@ public partial class BrowserTabViewModel : ObservableObject
     [ObservableProperty] private string address;
     [ObservableProperty] private string siteIdentity = "Web";
     [ObservableProperty] private ImageSource? favicon;
+    public string FaviconFallback => FaviconCacheService.FallbackLetter(Title, Url);
     [ObservableProperty] private string workspaceId = "default";
     [ObservableProperty] private bool canGoBack;
     [ObservableProperty] private bool canGoForward;
@@ -50,6 +51,7 @@ public partial class BrowserTabViewModel : ObservableObject
         this.url = url;
         address = url;
         siteIdentity = BrowserHome.IsStartPage(url) ? LocalizationService.Text("StartPage") : IdentifySite(url);
+        favicon = BrowserHome.IsStartPage(url) || isPrivate ? null : _services.Favicons.GetCached(url);
     }
 
     public void Attach(WebView2 view)
@@ -83,6 +85,7 @@ public partial class BrowserTabViewModel : ObservableObject
         IsLoading = true;
         Address = target;
         Url = target;
+        Favicon = BrowserHome.IsStartPage(target) || IsPrivate ? null : _services.Favicons.GetCached(target);
         Status = string.Empty;
         App.Current.Dispatcher.Invoke(() =>
         {
@@ -148,9 +151,12 @@ public partial class BrowserTabViewModel : ObservableObject
         IsReaderMode = false;
         SiteIdentity = BrowserHome.IsStartPage(value) ? LocalizationService.Text("StartPage") : IdentifySite(value);
         if (BrowserHome.IsStartPage(value)) Favicon = null;
+        OnPropertyChanged(nameof(FaviconFallback));
         OnPropertyChanged(nameof(IsStartPage));
         ToggleReaderModeCommand.NotifyCanExecuteChanged();
     }
+
+    partial void OnTitleChanged(string value) => OnPropertyChanged(nameof(FaviconFallback));
 
     public void NavigateText(string text)
     {

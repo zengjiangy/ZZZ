@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Text.Json.Serialization;
 using System.Windows.Media;
+using ZZZ.Services;
 
 namespace ZZZ.Models;
 
@@ -14,6 +15,8 @@ public sealed partial class Bookmark : ObservableObject
     [ObservableProperty]
     [property: JsonIgnore]
     private ImageSource? favicon;
+    [JsonIgnore]
+    public string FaviconFallback => FaviconCacheService.FallbackLetter(Title, Url);
 }
 
 public sealed partial class HistoryEntry : ObservableObject
@@ -24,6 +27,8 @@ public sealed partial class HistoryEntry : ObservableObject
     [ObservableProperty]
     [property: JsonIgnore]
     private ImageSource? favicon;
+    [JsonIgnore]
+    public string FaviconFallback => FaviconCacheService.FallbackLetter(Title, Url);
 }
 
 public sealed partial class WorkspaceDefinition : ObservableObject

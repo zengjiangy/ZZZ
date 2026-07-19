@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using ZZZ.Services;
 using ZZZ.ViewModels;
 using ZZZ.Configuration;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace ZZZ.Views;
 
@@ -20,6 +21,7 @@ public partial class StartPageView : UserControl
     private int _frameIndex;
     private bool _isLoaded;
     private int _backgroundLoadRevision;
+    private readonly HashSet<string> _faviconLoads = new(StringComparer.OrdinalIgnoreCase);
 
     public StartPageView(BrowserTabViewModel tab)
     {
@@ -231,7 +233,7 @@ public partial class StartPageView : UserControl
     {
         var settings = App.Services.Settings.Current.StartPage;
         var width = Math.Max(100, Math.Min(260, settings.BookmarkTileWidth));
-        BookmarksList.ItemsSource = App.Services.Bookmarks.Items.Where(x => x.ShowOnStartPage).Take(24)
+        var groups = App.Services.Bookmarks.Items.Where(x => x.ShowOnStartPage).Take(24)
             .Select(x => new StartBookmark
             {
                 Group = string.IsNullOrWhiteSpace(x.Group) ? LocalizationService.Text("Ungrouped") : x.Group.Trim(),
@@ -248,6 +250,15 @@ public partial class StartPageView : UserControl
             .GroupBy(x => x.Group, StringComparer.CurrentCultureIgnoreCase)
             .Select(x => new StartBookmarkGroup { Name = x.Key, Items = x.ToArray() })
             .ToArray();
+        BookmarksList.ItemsSource = groups;
+        foreach (var bookmark in groups.SelectMany(x => x.Items).Where(x => x.Favicon is null && _faviconLoads.Add(x.Url)))
+            _ = LoadFaviconAsync(bookmark);
+    }
+
+    private async Task LoadFaviconAsync(StartBookmark bookmark)
+    {
+        var image = await App.Services.Favicons.GetOrFetchAsync(bookmark.Url);
+        if (_isLoaded && image is not null) bookmark.Favicon = image;
     }
 
     private void SearchBox_KeyDown(object sender, KeyEventArgs e)
@@ -262,13 +273,15 @@ public partial class StartPageView : UserControl
         if (sender is Button { Tag: string url }) _tab.NavigateText(url);
     }
 
-    private sealed class StartBookmark
+    private sealed class StartBookmark : ObservableObject
     {
+        private ImageSource? _favicon;
         public string Group { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public string Url { get; set; } = string.Empty;
         public string DisplayUrl { get; set; } = string.Empty;
-        public ImageSource? Favicon { get; set; }
+        public ImageSource? Favicon { get => _favicon; set => SetProperty(ref _favicon, value); }
+        public string FaviconFallback => FaviconCacheService.FallbackLetter(Title, Url);
         public double TileWidth { get; set; }
         public double TileHeight { get; set; }
         public Thickness TilePadding { get; set; }

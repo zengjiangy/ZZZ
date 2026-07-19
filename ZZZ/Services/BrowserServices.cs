@@ -288,7 +288,14 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
             core.Settings.UserAgent = IsGoogleTranslate(e.Uri) ? ChromeDesktopUserAgent : ResolveUserAgent(_settings.Current.Browser);
             tab.BeginNavigation(e.Uri);
         };
-        core.SourceChanged += (_, _) => { tab.Url = core.Source; tab.Address = core.Source; };
+        core.SourceChanged += (_, _) =>
+        {
+            var source = core.Source;
+            if (!FaviconCacheService.HasSameOrigin(tab.Url, source))
+                tab.Favicon = tab.IsPrivate ? null : _favicons.GetCached(source);
+            tab.Url = source;
+            tab.Address = source;
+        };
         core.DocumentTitleChanged += (_, _) => tab.Title = string.IsNullOrWhiteSpace(core.DocumentTitle) ? LocalizationService.Text("NewTab") : core.DocumentTitle;
         core.FaviconChanged += async (_, _) => await UpdateFaviconAsync(core, tab);
         core.HistoryChanged += (_, _) => { tab.CanGoBack = core.CanGoBack; tab.CanGoForward = core.CanGoForward; };
@@ -692,7 +699,8 @@ style.textContent='html{{filter:grayscale(1)!important}}';
     private async Task UpdateFaviconAsync(CoreWebView2 core, BrowserTabViewModel tab)
     {
         if (_isShuttingDown || tab.IsClosed || BrowserHome.IsStartPage(tab.Url)) return;
-        var sourceUrl = tab.Url;
+        var sourceUrl = core.Source;
+        if (string.IsNullOrWhiteSpace(sourceUrl) || !string.Equals(tab.Url, sourceUrl, StringComparison.OrdinalIgnoreCase)) return;
         try
         {
             using var stream = await core.GetFaviconAsync(CoreWebView2FaviconImageFormat.Png);
