@@ -13,6 +13,7 @@ public partial class LibraryWindow : Window
 {
     private readonly MainViewModel _main;
     private readonly ObservableCollection<UserScript> _scripts;
+    private readonly HashSet<string> _faviconLoads = new(StringComparer.OrdinalIgnoreCase);
     public LibraryWindow(MainViewModel main)
     {
         InitializeComponent();
@@ -90,17 +91,41 @@ public partial class LibraryWindow : Window
             : selected == ungrouped
                 ? _main.Services.Bookmarks.Items.Where(x => string.IsNullOrWhiteSpace(x.Group)).ToArray()
                 : _main.Services.Bookmarks.Items.Where(x => string.Equals(x.Group?.Trim(), selected, StringComparison.CurrentCultureIgnoreCase)).ToArray();
-        foreach (var bookmark in byGroup) bookmark.Favicon ??= _main.Services.Favicons.GetCached(bookmark.Url);
+        foreach (var bookmark in byGroup)
+        {
+            bookmark.Favicon ??= _main.Services.Favicons.GetCached(bookmark.Url);
+            QueueFavicon(bookmark.Url, bookmark.Favicon);
+        }
         BookmarksGrid.ItemsSource = query.Length == 0 ? byGroup : byGroup.Where(x => Matches(query, x.Title, x.Url, x.Group)).ToArray();
     }
     private void RefreshHistoryView()
     {
         var query = HistorySearchBox?.Text.Trim() ?? string.Empty;
-        foreach (var entry in _main.Services.History.Items) entry.Favicon ??= _main.Services.Favicons.GetCached(entry.Url);
+        foreach (var entry in _main.Services.History.Items)
+        {
+            entry.Favicon ??= _main.Services.Favicons.GetCached(entry.Url);
+            QueueFavicon(entry.Url, entry.Favicon);
+        }
         HistoryGrid.ItemsSource = query.Length == 0
             ? _main.Services.History.Items
             : _main.Services.History.Items.Where(x => Matches(query, x.Title, x.Url, x.VisitedUtc.ToString("g"))).ToArray();
     }
+    private void QueueFavicon(string url, System.Windows.Media.ImageSource? current)
+    {
+        if (current is not null) return;
+        var origin = FaviconOrigin(url);
+        if (origin.Length > 0 && _faviconLoads.Add(origin)) _ = HydrateFaviconAsync(url, origin);
+    }
+    private async Task HydrateFaviconAsync(string url, string origin)
+    {
+        var image = await _main.Services.Favicons.GetOrFetchAsync(url);
+        if (image is null) return;
+        foreach (var bookmark in _main.Services.Bookmarks.Items.Where(x => FaviconOrigin(x.Url) == origin)) bookmark.Favicon = image;
+        foreach (var entry in _main.Services.History.Items.Where(x => FaviconOrigin(x.Url) == origin)) entry.Favicon = image;
+    }
+    private static string FaviconOrigin(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
+        ? uri.GetLeftPart(UriPartial.Authority).ToLowerInvariant()
+        : string.Empty;
     private static bool Matches(string query, params string?[] values) => values.Any(x => x is { Length: > 0 } && x.IndexOf(query, StringComparison.CurrentCultureIgnoreCase) >= 0);
     private bool ConfirmSensitive(string operationKey)
     {

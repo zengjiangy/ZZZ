@@ -58,7 +58,7 @@ public sealed class AdBlockManager : IDisposable
             Architecture.Arm64 => "Windows NT 10.0; ARM64",
             _ => "Windows NT 10.0; Win64; x64"
         };
-        _client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) ZZZ/2.1.5");
+        _client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) ZZZ/2.2.0");
         _ownsClient = true;
     }
 

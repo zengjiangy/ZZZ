@@ -864,7 +864,7 @@ public sealed class UserScriptService : IUserScriptService
             Architecture.Arm64 => "Windows NT 10.0; ARM64",
             _ => "Windows NT 10.0; Win64; x64"
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/2.1.5");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/2.2.0");
         return client;
     }
 }
@@ -990,19 +990,21 @@ public static class ThemeService
         IsDarkTheme = mode == AppearanceMode.Dark || (mode == AppearanceMode.System && IsSystemDark());
         IsGrayscaleMode = grayscale;
         var dark = IsDarkTheme;
-        Set("WindowBrush", dark ? "#FF202124" : "#FFF7F7F8");
-        Set("ChromeBrush", dark ? "#FF25262A" : "#FFF0F1F5");
-        Set("SurfaceBrush", dark ? "#FF292A2D" : "#FFFFFFFF");
-        Set("AddressBrush", dark ? "#FF303136" : "#FFF9F9FB");
-        Set("TextBrush", dark ? "#FFF1F3F4" : "#FF202124");
-        Set("MutedBrush", dark ? "#FFB5B8BD" : "#FF62666D");
-        Set("LineBrush", dark ? "#FF3B3D42" : "#FFE3E3E7");
-        var defaultAccent = ParseColor(dark ? "#FF9D8CFF" : "#FF6557C8", System.Windows.Media.Color.FromRgb(101, 87, 200));
+        Set("WindowBrush", dark ? "#FF17151D" : "#FFF6F5FA");
+        Set("ChromeBrush", dark ? "#FF1E1B27" : "#FFF0EFF6");
+        Set("SurfaceBrush", dark ? "#FF27232F" : "#FFFFFFFF");
+        Set("SurfaceAltBrush", dark ? "#FF211E29" : "#FFFAF9FC");
+        Set("ToolbarBrush", dark ? "#F526222F" : "#F7FFFFFF");
+        Set("AddressBrush", dark ? "#FF302B39" : "#FFF4F3F8");
+        Set("TextBrush", dark ? "#FFF4F1FA" : "#FF1D1A24");
+        Set("MutedBrush", dark ? "#FFB9B2C4" : "#FF6E6978");
+        Set("LineBrush", dark ? "#FF403A49" : "#FFE1DFE8");
+        var defaultAccent = ParseColor(dark ? "#FFA99BFF" : "#FF6B5ADA", System.Windows.Media.Color.FromRgb(107, 90, 218));
         var accent = startPage?.SyncApplicationAccent == true
             ? ParseColor(startPage.BackgroundColor, defaultAccent)
             : defaultAccent;
         accent.A = 255;
-        var softTarget = dark ? System.Windows.Media.Color.FromRgb(41, 42, 45) : System.Windows.Media.Colors.White;
+        var softTarget = dark ? System.Windows.Media.Color.FromRgb(39, 35, 47) : System.Windows.Media.Colors.White;
         accent = GrayscaleIfNeeded(accent);
         defaultAccent = GrayscaleIfNeeded(defaultAccent);
         Set("AccentBrush", accent);
@@ -1013,9 +1015,9 @@ public static class ThemeService
         Set("AccentForegroundBrush", blackContrast >= whiteContrast ? System.Windows.Media.Colors.Black : System.Windows.Media.Colors.White);
         Set("AccentTextBrush", AccessibleAccentText(accent, accentSoft, dark));
         Set("AppIconBrush", defaultAccent);
-        Set("HoverBrush", dark ? "#18FFFFFF" : "#10000000");
-        Set("PressedBrush", dark ? "#28FFFFFF" : "#1D000000");
-        Set("WebBackdropBrush", dark ? "#FF111318" : "#FFFFFFFF");
+        Set("HoverBrush", dark ? "#16FFFFFF" : "#0D241C35");
+        Set("PressedBrush", dark ? "#26FFFFFF" : "#18241C35");
+        Set("WebBackdropBrush", dark ? "#FF111016" : "#FFFFFFFF");
         foreach (Window window in Application.Current.Windows) ApplyWindowChrome(window);
     }
 

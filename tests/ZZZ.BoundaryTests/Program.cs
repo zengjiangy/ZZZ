@@ -357,13 +357,24 @@ async Task CheckProtectedBrowserDataAsync()
         Check(reloadedWorkspaces.Items.Count == 2 && reloadedWorkspaces.Active.Name == "Research", "workspace names and active workspace persist");
         Check(restoredTabs.Count == 2 && restoredTabs.Any(x => x.WorkspaceId == defaultWorkspace.Id) && restoredTabs.Any(x => x.WorkspaceId == research.Id), "workspace restore keeps public tabs grouped and excludes private or start-page tabs");
 
-        var faviconBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        byte[] faviconBytes;
+        var faviconPixels = Enumerable.Repeat((byte)0xCC, 16 * 16 * 4).ToArray();
+        var faviconBitmap = System.Windows.Media.Imaging.BitmapSource.Create(16, 16, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, faviconPixels, 16 * 4);
+        var faviconEncoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        faviconEncoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(faviconBitmap));
+        using (var encodedFavicon = new MemoryStream())
+        {
+            faviconEncoder.Save(encodedFavicon);
+            faviconBytes = encodedFavicon.ToArray();
+        }
         var faviconCache = new FaviconCacheService();
         using (var faviconStream = new MemoryStream(faviconBytes, false))
             await faviconCache.CaptureAsync("https://favicon-secret.example/path", faviconStream, persist: true);
         var faviconFile = Directory.GetFiles(AppPaths.Favicons, "*.dat").Single();
         Check(!File.ReadAllBytes(faviconFile).Take(8).SequenceEqual(faviconBytes.Take(8)), "favicon cache files are DPAPI-protected instead of storing raw PNG data");
         Check(new FaviconCacheService().GetCached("https://favicon-secret.example/other") is not null, "protected favicon cache reloads by site origin for bookmarks and history");
+        Check(new FaviconCacheService().GetCached("http://favicon-secret.example/other") is null, "favicon cache is isolated by full origin instead of leaking icons across HTTP and HTTPS sites");
+        Check(FaviconCacheService.FallbackLetter("Example", "https://www.example.com/") == "E", "missing favicons use a restrained site letter instead of a decorative fake icon");
 
         Check(AppPaths.PrivateWebViewRoot.StartsWith(isolatedRoot, StringComparison.OrdinalIgnoreCase), "private WebView data follows the selected data root");
     }

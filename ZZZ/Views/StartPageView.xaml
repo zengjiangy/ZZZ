@@ -4,11 +4,11 @@
              Loaded="UserControl_Loaded" Unloaded="UserControl_Unloaded">
     <UserControl.Resources>
         <SolidColorBrush x:Key="StartPageForegroundBrush" Color="White"/>
-        <SolidColorBrush x:Key="StartPagePanelBrush" Color="#D9202733"/>
-        <SolidColorBrush x:Key="StartPageBorderBrush" Color="#44FFFFFF"/>
+        <SolidColorBrush x:Key="StartPagePanelBrush" Color="#D91C1926"/>
+        <SolidColorBrush x:Key="StartPageBorderBrush" Color="#3FFFFFFF"/>
         <Style x:Key="StartPageBookmarkButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-                <Border x:Name="Panel" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                <Border x:Name="Panel" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="13" Padding="{TemplateBinding Padding}">
                     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <ControlTemplate.Triggers>
@@ -22,23 +22,36 @@
     <Grid x:Name="Root">
         <Image x:Name="BackgroundImage" Stretch="UniformToFill" IsHitTestVisible="False"/>
         <Border x:Name="BackgroundScrim" IsHitTestVisible="False" Background="Transparent"/>
-        <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="28" MaxWidth="820">
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <Border Background="{DynamicResource StartPagePanelBrush}" BorderBrush="{DynamicResource StartPageBorderBrush}" BorderThickness="1" CornerRadius="15" Padding="2">
-                <TextBox x:Name="SearchBox" Height="54" MinWidth="420" MaxWidth="700" Padding="18,0" FontSize="17"
-                         VerticalContentAlignment="Center" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource StartPageForegroundBrush}"
-                         CaretBrush="{DynamicResource StartPageForegroundBrush}" KeyDown="SearchBox_KeyDown" ToolTip="{DynamicResource AddressPlaceholder}"/>
+        <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="32" MaxWidth="920">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <StackPanel HorizontalAlignment="Center" Margin="0,0,0,26">
+                <Border Width="70" Height="70" CornerRadius="22" Background="{DynamicResource AccentBrush}" BorderBrush="#33FFFFFF" BorderThickness="1" HorizontalAlignment="Center">
+                    <Border.Effect><DropShadowEffect BlurRadius="26" ShadowDepth="8" Opacity="0.32" Color="#2C1F74"/></Border.Effect>
+                    <TextBlock Text="Z" Foreground="White" FontSize="31" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <TextBlock Text="ZZZ" Foreground="{DynamicResource StartPageForegroundBrush}" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                <TextBlock Text="{DynamicResource AddressPlaceholder}" Foreground="{DynamicResource StartPageForegroundBrush}" FontSize="12" Opacity="0.68" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+            </StackPanel>
+            <Border Grid.Row="1" Background="{DynamicResource StartPagePanelBrush}" BorderBrush="{DynamicResource StartPageBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="3" MinWidth="460" MaxWidth="760">
+                <Border.Effect><DropShadowEffect BlurRadius="28" ShadowDepth="8" Opacity="0.22" Color="#180F2B"/></Border.Effect>
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                    <Path Width="18" Height="18" Stroke="{DynamicResource StartPageForegroundBrush}" Opacity="0.72" StrokeThickness="1.7" StrokeStartLineCap="Round" Data="M15,15 L20,20 M17,10 A7,7 0 1 1 3,10 A7,7 0 1 1 17,10" Stretch="Uniform"/>
+                    <TextBox x:Name="SearchBox" Grid.Column="1" Height="58" MinWidth="350" Padding="0" FontSize="17"
+                             VerticalContentAlignment="Center" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource StartPageForegroundBrush}"
+                             CaretBrush="{DynamicResource StartPageForegroundBrush}" KeyDown="SearchBox_KeyDown" ToolTip="{DynamicResource AddressPlaceholder}"/>
+                    <Border Grid.Column="2" Width="32" Height="32" CornerRadius="10" Background="#20FFFFFF" VerticalAlignment="Center"><TextBlock Text="↵" Foreground="{DynamicResource StartPageForegroundBrush}" Opacity="0.72" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                </Grid>
             </Border>
-            <ItemsControl x:Name="BookmarksList" Grid.Row="1" Margin="0,18,0,0" HorizontalAlignment="Center">
+            <ItemsControl x:Name="BookmarksList" Grid.Row="2" Margin="0,24,0,0" HorizontalAlignment="Center">
                 <ItemsControl.ItemTemplate><DataTemplate>
                     <StackPanel Margin="0,0,0,9">
-                        <Border Background="{DynamicResource StartPagePanelBrush}" BorderBrush="{DynamicResource StartPageBorderBrush}" BorderThickness="1" CornerRadius="7" Padding="7,3" HorizontalAlignment="Left" Margin="5,0,5,3"><TextBlock Text="{Binding Name}" Foreground="{DynamicResource StartPageForegroundBrush}" FontWeight="SemiBold"/></Border>
+                        <Border Background="{DynamicResource StartPagePanelBrush}" BorderBrush="{DynamicResource StartPageBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="9,5" HorizontalAlignment="Left" Margin="5,0,5,5"><TextBlock Text="{Binding Name}" Foreground="{DynamicResource StartPageForegroundBrush}" FontWeight="SemiBold" FontSize="11"/></Border>
                         <ItemsControl ItemsSource="{Binding Items}">
                             <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate><DataTemplate>
                                 <Button Style="{StaticResource StartPageBookmarkButton}" Tag="{Binding Url}" Click="Bookmark_Click" ToolTip="{Binding Url}" Margin="5" Padding="{Binding TilePadding}" Width="{Binding TileWidth}" Height="{Binding TileHeight}"
                                         Background="{DynamicResource StartPagePanelBrush}" Foreground="{DynamicResource StartPageForegroundBrush}" BorderBrush="{DynamicResource StartPageBorderBrush}" BorderThickness="1">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"><Grid Width="22" Height="22" Margin="0,0,8,0"><Border CornerRadius="6" Background="{DynamicResource StartPageBorderBrush}"/><TextBlock Text="◉" Foreground="{DynamicResource StartPageForegroundBrush}" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image Source="{Binding Favicon}" Width="19" Height="19" Stretch="Uniform"/></Grid><StackPanel><TextBlock Text="{Binding Title}" Foreground="{DynamicResource StartPageForegroundBrush}" TextTrimming="CharacterEllipsis" FontSize="{Binding TitleSize}" HorizontalAlignment="Left"/><TextBlock Text="{Binding DisplayUrl}" Foreground="{DynamicResource StartPageForegroundBrush}" Visibility="{Binding ShowUrl, Converter={StaticResource BoolVisibility}}" Opacity="0.65" FontSize="10" TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" Margin="0,4,0,0"/></StackPanel></StackPanel>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"><Grid Width="24" Height="24" Margin="0,0,9,0"><Border CornerRadius="7" Background="{DynamicResource StartPageBorderBrush}"/><TextBlock Text="{Binding FaviconFallback}" Foreground="{DynamicResource StartPageForegroundBrush}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image Source="{Binding Favicon}" Width="22" Height="22" Stretch="Uniform"/></Grid><StackPanel><TextBlock Text="{Binding Title}" Foreground="{DynamicResource StartPageForegroundBrush}" TextTrimming="CharacterEllipsis" FontSize="{Binding TitleSize}" HorizontalAlignment="Left"/><TextBlock Text="{Binding DisplayUrl}" Foreground="{DynamicResource StartPageForegroundBrush}" Visibility="{Binding ShowUrl, Converter={StaticResource BoolVisibility}}" Opacity="0.65" FontSize="10" TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" Margin="0,4,0,0"/></StackPanel></StackPanel>
                                 </Button>
                             </DataTemplate></ItemsControl.ItemTemplate>
                         </ItemsControl>
