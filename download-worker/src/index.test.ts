@@ -100,6 +100,7 @@ describe("download worker", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toMatch(/^\/releases\/v2\.2\.1\/ZZZ-v2\.2\.1-win-/);
+    expect(response.headers.get("cache-control")).toContain("no-store");
   });
 
   it("streams a release asset with immutable attachment headers", async () => {
