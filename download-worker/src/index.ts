@@ -20,7 +20,9 @@ const SERVICE_NAME = "zzz-release-downloads";
 const LATEST_VERSION = "v2.2.1";
 const ALLOWED_METHODS = "GET, HEAD, OPTIONS";
 const RELEASE_CACHE_CONTROL = "public, max-age=31536000, immutable";
-const LATEST_CACHE_CONTROL = "public, max-age=300, must-revalidate";
+// A latest alias is mutable release metadata. Never let an edge retain the previous
+// release redirect after a deployment; versioned binaries remain immutable below.
+const LATEST_CACHE_CONTROL = "no-store, max-age=0";
 
 const LATEST_ASSETS: Readonly<Record<Architecture, string>> = {
   x64: "ZZZ-v2.2.1-win-x64.exe",
