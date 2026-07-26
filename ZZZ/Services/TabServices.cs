@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using ZZZ.Configuration;
 using ZZZ.ViewModels;
 
 namespace ZZZ.Services;
@@ -6,6 +7,7 @@ namespace ZZZ.Services;
 public interface ITabService
 {
     ObservableCollection<BrowserTabViewModel> Items { get; }
+    IReadOnlyList<RecentlyClosedTab> RecentlyClosed { get; }
     BrowserTabViewModel Create(string url, bool isPrivate = false, string? workspaceId = null);
     void Move(BrowserTabViewModel tab, int destinationIndex);
     void MoveWithinWorkspace(BrowserTabViewModel tab, int destinationIndex);
@@ -13,11 +15,26 @@ public interface ITabService
     int Close(BrowserTabViewModel tab);
     void CloseOthers(BrowserTabViewModel tab);
     void CloseToRight(BrowserTabViewModel tab);
+    RecentlyClosedTab? PopRecentlyClosed();
+}
+
+/// <summary>
+/// In-memory record of a closed public tab so Ctrl+Shift+T can reopen it.
+/// Deliberately never persisted: the list lives only for the current run and
+/// private tabs or the built-in start page are never recorded.
+/// </summary>
+public sealed class RecentlyClosedTab(string url, string workspaceId)
+{
+    public string Url { get; } = url;
+    public string WorkspaceId { get; } = workspaceId;
 }
 
 public sealed class TabService(AppServices services) : ITabService
 {
+    private const int RecentlyClosedLimit = 25;
+    private readonly List<RecentlyClosedTab> _recentlyClosed = [];
     public ObservableCollection<BrowserTabViewModel> Items { get; } = [];
+    public IReadOnlyList<RecentlyClosedTab> RecentlyClosed => _recentlyClosed;
     public BrowserTabViewModel Create(string url, bool isPrivate = false, string? workspaceId = null)
     {
         var targetWorkspace = string.IsNullOrWhiteSpace(workspaceId) ? services.Workspaces.ActiveWorkspaceId : workspaceId!;
@@ -58,9 +75,24 @@ public sealed class TabService(AppServices services) : ITabService
     {
         var index = Items.IndexOf(tab);
         if (index < 0) return -1;
+        RememberClosedTab(tab);
         services.Browser.Close(tab);
         Items.RemoveAt(index);
         return index;
+    }
+    public RecentlyClosedTab? PopRecentlyClosed()
+    {
+        if (_recentlyClosed.Count == 0) return null;
+        var entry = _recentlyClosed[_recentlyClosed.Count - 1];
+        _recentlyClosed.RemoveAt(_recentlyClosed.Count - 1);
+        return entry;
+    }
+    private void RememberClosedTab(BrowserTabViewModel tab)
+    {
+        if (tab.IsPrivate || BrowserHome.IsStartPage(tab.Url)) return;
+        if (!Uri.TryCreate(tab.Url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https" or "file")) return;
+        _recentlyClosed.Add(new RecentlyClosedTab(tab.Url, tab.WorkspaceId));
+        if (_recentlyClosed.Count > RecentlyClosedLimit) _recentlyClosed.RemoveAt(0);
     }
     public void CloseOthers(BrowserTabViewModel tab)
     {

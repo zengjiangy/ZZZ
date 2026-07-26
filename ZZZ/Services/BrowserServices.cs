@@ -24,36 +24,82 @@ public sealed class DownloadService(ISettingsService settings) : IDownloadServic
 
     public void Handle(CoreWebView2DownloadStartingEventArgs args)
     {
-        var config = settings.Current.Downloads;
-        if (config.Mode == DownloadMode.External && !string.IsNullOrWhiteSpace(config.ExternalCommand))
+        // This runs inside a WebView2 event handler: a malformed folder setting
+        // or an unwritable disk must degrade gracefully, never crash the app.
+        try
         {
-            args.Cancel = true;
+            var config = settings.Current.Downloads;
+            if (config.Mode == DownloadMode.External && !string.IsNullOrWhiteSpace(config.ExternalCommand))
+            {
+                args.Cancel = true;
+                try
+                {
+                    Process.Start(new ProcessStartInfo(config.ExternalCommand, BuildExternalArguments(config.ExternalArguments, args.DownloadOperation.Uri)) { UseShellExecute = true });
+                }
+                catch { }
+                return;
+            }
+
+            var folder = ResolveWritableFolder(config.Folder);
+            var suggested = Path.GetFileName(args.ResultFilePath);
+            if (string.IsNullOrWhiteSpace(suggested)) suggested = "download";
+            args.ResultFilePath = UniquePath(Path.Combine(folder, suggested));
+            var item = new DownloadItem
+            {
+                FileName = Path.GetFileName(args.ResultFilePath),
+                SourceUrl = args.DownloadOperation.Uri,
+                ResultPath = args.ResultFilePath,
+                MimeType = args.DownloadOperation.MimeType,
+                StartedAt = DateTime.Now,
+                Status = LocalizationService.Text("DownloadStarting")
+            };
+            Items.Insert(0, item);
+            args.DownloadOperation.BytesReceivedChanged += (_, _) => Update(item, args.DownloadOperation);
+            args.DownloadOperation.StateChanged += (_, _) => Update(item, args.DownloadOperation);
+            Update(item, args.DownloadOperation);
+        }
+        catch
+        {
+            // WebView2 continues with its own default download path for this
+            // transfer; only the ZZZ-side bookkeeping is skipped.
+        }
+    }
+
+    /// <summary>
+    /// Quotes the download URL as a single argument and substitutes it into the
+    /// configured template. Templates without a "{url}" placeholder previously
+    /// launched the external downloader without any URL at all; they now get
+    /// the URL appended so the configured tool always receives the target.
+    /// </summary>
+    public static string BuildExternalArguments(string? template, string url)
+    {
+        var quoted = "\"" + url.Replace("\"", "%22") + "\"";
+        if (string.IsNullOrWhiteSpace(template)) return quoted;
+        return template!.Contains("{url}")
+            ? template.Replace("{url}", quoted)
+            : template.TrimEnd() + " " + quoted;
+    }
+
+    /// <summary>
+    /// Returns the first usable download directory: the configured folder, the
+    /// profile Downloads folder, then the TEMP directory as a last resort. An
+    /// invalid path stored in settings.json used to throw from the download
+    /// event and take the whole browser down.
+    /// </summary>
+    public static string ResolveWritableFolder(string? configuredFolder)
+    {
+        foreach (var candidate in new[] { configuredFolder, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads") })
+        {
+            if (string.IsNullOrWhiteSpace(candidate)) continue;
             try
             {
-                var safeUrl = args.DownloadOperation.Uri.Replace("\"", "%22");
-                Process.Start(new ProcessStartInfo(config.ExternalCommand, config.ExternalArguments.Replace("{url}", $"\"{safeUrl}\"")) { UseShellExecute = true });
+                var full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(candidate!.Trim()));
+                Directory.CreateDirectory(full);
+                return full;
             }
             catch { }
-            return;
         }
-
-        Directory.CreateDirectory(config.Folder);
-        var suggested = Path.GetFileName(args.ResultFilePath);
-        if (string.IsNullOrWhiteSpace(suggested)) suggested = "download";
-        args.ResultFilePath = UniquePath(Path.Combine(config.Folder, suggested));
-        var item = new DownloadItem
-        {
-            FileName = Path.GetFileName(args.ResultFilePath),
-            SourceUrl = args.DownloadOperation.Uri,
-            ResultPath = args.ResultFilePath,
-            MimeType = args.DownloadOperation.MimeType,
-            StartedAt = DateTime.Now,
-            Status = LocalizationService.Text("DownloadStarting")
-        };
-        Items.Insert(0, item);
-        args.DownloadOperation.BytesReceivedChanged += (_, _) => Update(item, args.DownloadOperation);
-        args.DownloadOperation.StateChanged += (_, _) => Update(item, args.DownloadOperation);
-        Update(item, args.DownloadOperation);
+        return Path.GetTempPath();
     }
 
     private static void Update(DownloadItem item, CoreWebView2DownloadOperation op)
@@ -106,12 +152,14 @@ public interface IBrowserLifecycleService : IDisposable
     void Close(BrowserTabViewModel tab);
 }
 
-public enum BrowserShortcut { Find, CloseSplit, TaskManager }
+public enum BrowserShortcut { Find, CloseSplit, TaskManager, NextTab, PreviousTab, SelectTabNumber, ToggleBookmark, ReopenClosedTab, Library, Downloads }
 
-public sealed class BrowserShortcutEventArgs(BrowserTabViewModel tab, BrowserShortcut shortcut) : EventArgs
+public sealed class BrowserShortcutEventArgs(BrowserTabViewModel tab, BrowserShortcut shortcut, int tabNumber = 0) : EventArgs
 {
     public BrowserTabViewModel Tab { get; } = tab;
     public BrowserShortcut Shortcut { get; } = shortcut;
+    /// <summary>1-based tab number for <see cref="BrowserShortcut.SelectTabNumber"/> (9 = last tab).</summary>
+    public int TabNumber { get; } = tabNumber;
     public bool Handled { get; set; }
 }
 
@@ -254,15 +302,36 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     {
         var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
-        BrowserShortcut? shortcut = ctrl && e.Key == Key.F ? BrowserShortcut.Find
-            : ctrl && shift && e.Key == Key.W ? BrowserShortcut.CloseSplit
-            : shift && e.Key == Key.Escape ? BrowserShortcut.TaskManager
+        // Chromium consumes some accelerators before they can bubble to the
+        // window, so every tab- and browser-level shortcut that must keep
+        // working while the page has focus is intercepted here and routed to
+        // the main window through ShortcutRequested.
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var tabNumber = TabNumberFromKey(key);
+        BrowserShortcut? shortcut = ctrl && key == Key.F ? BrowserShortcut.Find
+            : ctrl && shift && key == Key.W ? BrowserShortcut.CloseSplit
+            : shift && key == Key.Escape ? BrowserShortcut.TaskManager
+            : ctrl && shift && key == Key.T ? BrowserShortcut.ReopenClosedTab
+            : ctrl && key == Key.Tab ? (shift ? BrowserShortcut.PreviousTab : BrowserShortcut.NextTab)
+            : ctrl && key == Key.PageDown ? BrowserShortcut.NextTab
+            : ctrl && key == Key.PageUp ? BrowserShortcut.PreviousTab
+            : ctrl && !shift && tabNumber > 0 ? BrowserShortcut.SelectTabNumber
+            : ctrl && !shift && key == Key.D ? BrowserShortcut.ToggleBookmark
+            : ctrl && !shift && key == Key.H ? BrowserShortcut.Library
+            : ctrl && !shift && key == Key.J ? BrowserShortcut.Downloads
             : null;
         if (shortcut is null) return;
-        var request = new BrowserShortcutEventArgs(tab, shortcut.Value);
+        var request = new BrowserShortcutEventArgs(tab, shortcut.Value, tabNumber);
         ShortcutRequested?.Invoke(this, request);
         if (request.Handled) e.Handled = true;
     }
+
+    private static int TabNumberFromKey(Key key) => key switch
+    {
+        >= Key.D1 and <= Key.D9 => key - Key.D1 + 1,
+        >= Key.NumPad1 and <= Key.NumPad9 => key - Key.NumPad1 + 1,
+        _ => 0
+    };
 
     private async Task ConfigureAsync(CoreWebView2 core, BrowserTabViewModel tab, CancellationToken cancellationToken)
     {
@@ -952,6 +1021,9 @@ public sealed class AppServices : IDisposable
         lock (_backgroundInitializationGate) initialization = _backgroundInitialization;
         var background = initialization ?? Task.CompletedTask;
         try { await Task.WhenAll(background, Browser.WaitForPendingInitializationsAsync()); } catch { }
+        // Persist any coalesced history additions before the exit clear policy
+        // runs, so nothing can recreate data after the privacy operation.
+        try { await History.FlushAsync(); } catch { }
     }
     public Task CompleteShutdownAsync() => Browser.CompleteShutdownAsync();
     public void Dispose() { Browser.Dispose(); AdBlock.Dispose(); Translation.Dispose(); }

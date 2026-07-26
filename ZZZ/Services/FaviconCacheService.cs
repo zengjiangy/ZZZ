@@ -3,6 +3,7 @@ using System.Text;
 using System.Net.Http;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using ZZZ.Configuration;
 
 namespace ZZZ.Services;
 
@@ -208,7 +209,7 @@ public sealed class FaviconCacheService
             AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
         };
         var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) ZZZ/2.2.1 favicon");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 (Windows NT 10.0; Win64; x64) {AppVersion.UserAgentProduct} favicon");
         return client;
     }
 
