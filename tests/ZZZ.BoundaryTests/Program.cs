@@ -186,6 +186,62 @@ Check(pickerBootstrap.Contains("chrome.webview.postMessage") && pickerBootstrap.
 await CheckAdBlockManagerValidationAsync();
 await CheckAdBlockManagerUpdatesAsync();
 
+// 2.2.2: the product version has a single source of truth. If the csproj
+// version and AppVersion.Current ever drift apart this fails the build.
+var assemblyVersion = typeof(AppVersion).Assembly.GetName().Version;
+Check(assemblyVersion is not null &&
+    $"{assemblyVersion!.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}" == AppVersion.Current,
+    "assembly version and AppVersion.Current stay in lockstep");
+Check(AppVersion.UserAgentProduct == "ZZZ/" + AppVersion.Current, "user-agent product token derives from the single version source");
+
+// 2.2.2: closed public tabs can be reopened; private tabs and the built-in
+// start page must never enter the reopen list.
+try
+{
+    using var reopenServices = new AppServices();
+    var privateTab = reopenServices.Tabs.Create("https://private.example/", isPrivate: true);
+    var startTab = reopenServices.Tabs.Create(BrowserHome.StartPageUrl);
+    var invalidTab = reopenServices.Tabs.Create("not a URL");
+    reopenServices.Tabs.Close(privateTab);
+    reopenServices.Tabs.Close(startTab);
+    reopenServices.Tabs.Close(invalidTab);
+    Check(reopenServices.Tabs.RecentlyClosed.Count == 0, "private, start-page, and invalid tabs never enter the recently closed list");
+    var firstClosed = reopenServices.Tabs.Create("https://reopen-one.example/");
+    var secondClosed = reopenServices.Tabs.Create("https://reopen-two.example/");
+    reopenServices.Tabs.Close(firstClosed);
+    reopenServices.Tabs.Close(secondClosed);
+    Check(reopenServices.Tabs.RecentlyClosed.Count == 2, "closing public tabs records them for reopen");
+    Check(reopenServices.Tabs.PopRecentlyClosed()?.Url == "https://reopen-two.example/", "reopen returns the most recently closed tab first");
+    Check(reopenServices.Tabs.PopRecentlyClosed()?.Url == "https://reopen-one.example/", "reopen keeps LIFO order");
+    Check(reopenServices.Tabs.PopRecentlyClosed() is null, "an exhausted reopen list returns nothing");
+    for (var i = 0; i < 30; i++) reopenServices.Tabs.Close(reopenServices.Tabs.Create($"https://bulk.example/{i}"));
+    Check(reopenServices.Tabs.RecentlyClosed.Count == 25 && reopenServices.Tabs.RecentlyClosed[24].Url == "https://bulk.example/29",
+        "the reopen list is bounded and keeps the newest entries");
+}
+catch (Exception ex) { Check(false, $"recently closed tab test threw {ex.GetType().FullName}: {ex.Message}"); }
+
+// 2.2.2: download start hardening.
+Check(DownloadService.BuildExternalArguments("{url}", "https://example.com/file.bin") == "\"https://example.com/file.bin\"",
+    "external downloader receives the URL as one quoted argument");
+Check(DownloadService.BuildExternalArguments("--dir C:\\Media", "https://example.com/a?b=1") == "--dir C:\\Media \"https://example.com/a?b=1\"",
+    "argument templates without {url} still receive the download URL");
+Check(DownloadService.BuildExternalArguments("{url}", "https://example.com/\"quote") == "\"https://example.com/%22quote\"",
+    "embedded quotes cannot break out of the external command line");
+Check(DownloadService.BuildExternalArguments(null, "https://example.com/x") == "\"https://example.com/x\"",
+    "an empty argument template still passes the URL");
+var fallbackDownloadFolder = DownloadService.ResolveWritableFolder("Q:\\definitely\\missing\\<>|invalid");
+Check(!string.IsNullOrWhiteSpace(fallbackDownloadFolder) && Directory.Exists(fallbackDownloadFolder),
+    "an invalid configured download folder falls back to a writable location");
+var isolatedDownloadFolder = Path.Combine(Path.GetTempPath(), "ZZZ.DownloadTests", Guid.NewGuid().ToString("N"));
+try
+{
+    Check(DownloadService.ResolveWritableFolder(isolatedDownloadFolder) == Path.GetFullPath(isolatedDownloadFolder) && Directory.Exists(isolatedDownloadFolder),
+        "a valid configured download folder is created and used as-is");
+}
+finally { try { Directory.Delete(isolatedDownloadFolder, true); } catch { } }
+
+await CheckHistoryBatchingAsync();
+
 if (failures.Count > 0)
 {
     Console.Error.WriteLine("Boundary tests failed:");
@@ -392,6 +448,56 @@ async Task CheckProtectedBrowserDataAsync()
         Check(preferredPixels.Length >= 4 && preferredPixels[0] > preferredPixels[2], "multi-frame favicons prefer the largest high-resolution frame instead of the first legacy frame");
 
         Check(AppPaths.PrivateWebViewRoot.StartsWith(isolatedRoot, StringComparison.OrdinalIgnoreCase), "private WebView data follows the selected data root");
+    }
+    finally
+    {
+        rootField.SetValue(null, originalRoot);
+        try { if (Directory.Exists(isolatedRoot)) Directory.Delete(isolatedRoot, true); } catch { }
+    }
+}
+
+async Task CheckHistoryBatchingAsync()
+{
+    var rootField = typeof(AppPaths).GetField("<Root>k__BackingField", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+    if (rootField is null)
+    {
+        Check(false, "history batching tests can isolate the data directory");
+        return;
+    }
+
+    var originalRoot = (string)rootField.GetValue(null)!;
+    var isolatedRoot = Path.Combine(Path.GetTempPath(), "ZZZ.HistoryBatchTests", Guid.NewGuid().ToString("N"));
+    try
+    {
+        rootField.SetValue(null, isolatedRoot);
+        Directory.CreateDirectory(isolatedRoot);
+
+        var history = new HistoryService();
+        await history.LoadAsync();
+        for (var i = 0; i < 5; i++) await history.AddAsync("Entry " + i, "https://batch.example/" + i);
+        Check(history.Items.Count == 5, "coalesced history additions are visible in memory immediately");
+        Check(!File.Exists(AppPaths.History), "page visits no longer rewrite the encrypted history file on every navigation");
+        await history.FlushAsync();
+        Check(File.Exists(AppPaths.History), "the history flush persists batched additions");
+
+        var reloaded = new HistoryService();
+        await reloaded.LoadAsync();
+        Check(reloaded.Items.Count == 5 && reloaded.Items[0].Url == "https://batch.example/4", "flushed history reloads newest-first without loss");
+
+        await reloaded.RemoveAsync(reloaded.Items[0]);
+        var afterRemove = new HistoryService();
+        await afterRemove.LoadAsync();
+        Check(afterRemove.Items.Count == 4, "deleting a history entry persists immediately without waiting for a flush");
+
+        await afterRemove.AddAsync("Pending", "https://batch.example/pending");
+        await afterRemove.ClearAsync();
+        var afterClear = new HistoryService();
+        await afterClear.LoadAsync();
+        Check(afterClear.Items.Count == 0, "clearing history persists immediately and drops pending batched entries");
+        await afterClear.FlushAsync();
+        var afterClearFlush = new HistoryService();
+        await afterClearFlush.LoadAsync();
+        Check(afterClearFlush.Items.Count == 0, "a late flush after clearing cannot resurrect cleared history");
     }
     finally
     {
