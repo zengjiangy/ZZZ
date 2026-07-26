@@ -17,7 +17,7 @@ interface ByteRange {
 }
 
 const SERVICE_NAME = "zzz-release-downloads";
-const LATEST_VERSION = "v2.2.1";
+const LATEST_VERSION = "v2.2.2";
 const ALLOWED_METHODS = "GET, HEAD, OPTIONS";
 const RELEASE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 // A latest alias is mutable release metadata. Never let an edge retain the previous
@@ -25,9 +25,9 @@ const RELEASE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const LATEST_CACHE_CONTROL = "no-store, max-age=0";
 
 const LATEST_ASSETS: Readonly<Record<Architecture, string>> = {
-  x64: "ZZZ-v2.2.1-win-x64.exe",
-  x86: "ZZZ-v2.2.1-win-x86.exe",
-  arm64: "ZZZ-v2.2.1-win-arm64.exe",
+  x64: "ZZZ-v2.2.2-win-x64.exe",
+  x86: "ZZZ-v2.2.2-win-x86.exe",
+  arm64: "ZZZ-v2.2.2-win-arm64.exe",
 };
 
 const VERSION_PATTERN = /^v\d+(?:\.\d+){1,2}(?:[-+][0-9A-Za-z.-]+)?$/;
