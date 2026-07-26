@@ -6,7 +6,7 @@ Official website: [zzz.campusphere.ltd](https://zzz.campusphere.ltd/)
 
 ZZZ is a lightweight, open-source browser for Windows, built with .NET Framework 4.8, WPF, and Microsoft WebView2. It uses the system WebView2 Runtime instead of bundling Chromium and can keep all browser data beside the executable for portable use.
 
-Current version: **2.2.1**
+Current version: **2.2.2**
 
 ## Download
 
@@ -14,9 +14,9 @@ Download the latest build from [GitHub Releases](https://github.com/zengjiangy/Z
 
 | File | Platform |
 |---|---|
-| `ZZZ-v2.2.1-win-x64.exe` | Native Windows x64 build |
-| `ZZZ-v2.2.1-win-x86.exe` | 32-bit Windows 10 x86 compatibility build; also runs under x86 emulation on Windows 10 on Arm |
-| `ZZZ-v2.2.1-win-arm64.exe` | Native Windows ARM64 build |
+| `ZZZ-v2.2.2-win-x64.exe` | Native Windows x64 build |
+| `ZZZ-v2.2.2-win-x86.exe` | 32-bit Windows 10 x86 compatibility build; also runs under x86 emulation on Windows 10 on Arm |
+| `ZZZ-v2.2.2-win-arm64.exe` | Native Windows ARM64 build |
 
 No installer is required. Windows 10 or 11, .NET Framework 4.8, and the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) are required.
 
@@ -70,11 +70,17 @@ History and bookmarks are encrypted for the current Windows user, as are parts o
 | `Ctrl+Shift+N` | New private tab |
 | `Ctrl+W` | Close current tab |
 | `Ctrl+L` / `Alt+D` | Focus address bar |
-| `Ctrl+R` | Reload |
+| `Ctrl+R` / `F5` | Reload |
 | `Ctrl+P` | Print |
 | `Ctrl+F` | Find in page |
 | `Ctrl+Shift+W` | Close split view |
-| `Ctrl+Shift+T` | Open the most recent history entry |
+| `Ctrl+Shift+T` | Reopen the most recently closed tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Switch to the next / previous tab |
+| `Ctrl+1`–`Ctrl+8` / `Ctrl+9` | Jump to that tab / the last tab |
+| `Ctrl+D` | Bookmark or unbookmark the current page |
+| `Ctrl+H` | Open the library (bookmarks and history) |
+| `Ctrl+J` | Open downloads |
+| Middle-click on a tab | Close that tab |
 | `Alt+Left` / `Alt+Right` | Back / forward |
 | `F9` | Toggle reading mode |
 | `F11` | Full screen |

@@ -6,7 +6,7 @@
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF 和 Microsoft WebView2 构建。它使用系统中的 WebView2 Runtime，不额外捆绑 Chromium，并支持把浏览器数据存放在程序目录中，方便随身携带。
 
-当前版本：**2.2.1**
+当前版本：**2.2.2**
 
 ## 下载与运行
 
@@ -14,9 +14,9 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 
 | 文件 | 适用平台 |
 |---|---|
-| `ZZZ-v2.2.1-win-x64.exe` | Windows x64 原生版本 |
-| `ZZZ-v2.2.1-win-x86.exe` | Windows 10 x86 32 位兼容版；也可在 Windows 10 on Arm 上以 x86 仿真运行 |
-| `ZZZ-v2.2.1-win-arm64.exe` | Windows ARM64 原生版本 |
+| `ZZZ-v2.2.2-win-x64.exe` | Windows x64 原生版本 |
+| `ZZZ-v2.2.2-win-x86.exe` | Windows 10 x86 32 位兼容版；也可在 Windows 10 on Arm 上以 x86 仿真运行 |
+| `ZZZ-v2.2.2-win-arm64.exe` | Windows ARM64 原生版本 |
 
 下载后直接运行即可，无需安装。系统需要：
 
@@ -114,11 +114,17 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 | `Ctrl+Shift+N` | 新建隐私标签页 |
 | `Ctrl+W` | 关闭当前标签页 |
 | `Ctrl+L` / `Alt+D` | 聚焦地址栏 |
-| `Ctrl+R` | 刷新页面 |
+| `Ctrl+R` / `F5` | 刷新页面 |
 | `Ctrl+P` | 打印页面 |
 | `Ctrl+F` | 在页面中查找 |
 | `Ctrl+Shift+W` | 退出当前分屏 |
-| `Ctrl+Shift+T` | 打开最近一条历史记录 |
+| `Ctrl+Shift+T` | 重新打开最近关闭的标签页 |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | 切换到下一个 / 上一个标签页 |
+| `Ctrl+1`–`Ctrl+8` / `Ctrl+9` | 切换到对应序号 / 最后一个标签页 |
+| `Ctrl+D` | 收藏或取消收藏当前页面 |
+| `Ctrl+H` | 打开资料库（书签与历史） |
+| `Ctrl+J` | 打开下载列表 |
+| 鼠标中键点击标签 | 关闭该标签页 |
 | `Alt+Left` / `Alt+Right` | 后退 / 前进 |
 | `F9` | 切换阅读模式 |
 | `F11` | 全屏 |
