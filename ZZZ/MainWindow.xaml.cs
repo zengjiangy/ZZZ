@@ -86,6 +86,16 @@ public partial class MainWindow : Window
         _draggedTab = FindTabContainer(list, e.OriginalSource as DependencyObject)?.DataContext as BrowserTabViewModel;
     }
 
+    private void TabsList_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // Middle-click closes the tab under the pointer, matching mainstream
+        // browser tab strips.
+        if (e.ChangedButton != MouseButton.Middle || sender is not ListBox list) return;
+        if (FindTabContainer(list, e.OriginalSource as DependencyObject)?.DataContext is not BrowserTabViewModel tab) return;
+        ViewModel.CloseTabCommand.Execute(tab);
+        e.Handled = true;
+    }
+
     private void TabsList_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed || _draggedTab is null) return;
@@ -327,22 +337,46 @@ public partial class MainWindow : Window
         var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
+        // WPF reports Alt combinations as Key.System with the real key in
+        // SystemKey; without this, Alt+Left/Right/D only worked while the web
+        // page had focus (where Chromium handles them) and were dead on the
+        // start page, address bar, and other WPF surfaces.
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
         var home = BrowserHome.GetHomeUrl(ViewModel.Services.Settings.Current);
-        if (ctrl && shift && e.Key == Key.N) { ViewModel.CreateTab(home, true); e.Handled = true; }
-        else if (ctrl && shift && e.Key == Key.T) { ViewModel.CreateTab(ViewModel.Services.History.Items.FirstOrDefault()?.Url ?? home); e.Handled = true; }
-        else if (ctrl && e.Key == Key.T) { ViewModel.CreateTab(home); e.Handled = true; }
-        else if (ctrl && shift && e.Key == Key.W && _splitTab is not null) { CloseSplit(); e.Handled = true; }
-        else if (ctrl && e.Key == Key.W && ViewModel.SelectedTab is not null) { ViewModel.CloseTabCommand.Execute(ViewModel.SelectedTab); e.Handled = true; }
-        else if ((ctrl && e.Key == Key.L) || (alt && e.Key == Key.D)) { AddressBox.Focus(); AddressBox.SelectAll(); e.Handled = true; }
-        else if (ctrl && e.Key == Key.R) { ViewModel.SelectedTab?.ReloadCommand.Execute(null); e.Handled = true; }
-        else if (ctrl && e.Key == Key.P) { ViewModel.SelectedTab?.Print(); e.Handled = true; }
-        else if (ctrl && e.Key == Key.F) { ShowFind(); e.Handled = true; }
-        else if (alt && e.Key == Key.Left) { ViewModel.SelectedTab?.BackCommand.Execute(null); e.Handled = true; }
-        else if (alt && e.Key == Key.Right) { ViewModel.SelectedTab?.ForwardCommand.Execute(null); e.Handled = true; }
-        else if (e.Key == Key.F12) { OpenDeveloperTools(); e.Handled = true; }
-        else if (e.Key == Key.F9) { ViewModel.SelectedTab?.ToggleReaderModeCommand.Execute(null); e.Handled = true; }
-        else if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; }
-        else if (shift && e.Key == Key.Escape) { new TaskManagerWindow(ViewModel).Show(); e.Handled = true; }
+        var tabNumber = ctrl && !shift && !alt ? TabNumberFromKey(key) : 0;
+        if (ctrl && shift && key == Key.N) { ViewModel.CreateTab(home, true); e.Handled = true; }
+        else if (ctrl && shift && key == Key.T) { ViewModel.ReopenClosedTabCommand.Execute(null); e.Handled = true; }
+        else if (ctrl && key == Key.T) { ViewModel.CreateTab(home); e.Handled = true; }
+        else if (ctrl && shift && key == Key.W && _splitTab is not null) { CloseSplit(); e.Handled = true; }
+        else if (ctrl && key == Key.W && ViewModel.SelectedTab is not null) { ViewModel.CloseTabCommand.Execute(ViewModel.SelectedTab); e.Handled = true; }
+        else if ((ctrl && key == Key.L) || (alt && key == Key.D)) { AddressBox.Focus(); AddressBox.SelectAll(); e.Handled = true; }
+        else if ((ctrl && key == Key.R) || key == Key.F5) { ViewModel.SelectedTab?.ReloadCommand.Execute(null); e.Handled = true; }
+        else if (ctrl && key == Key.P) { ViewModel.SelectedTab?.Print(); e.Handled = true; }
+        else if (ctrl && key == Key.F) { ShowFind(); e.Handled = true; }
+        else if (ctrl && (key == Key.Tab || key == Key.PageDown || key == Key.PageUp)) { ViewModel.SelectAdjacentTab(shift || key == Key.PageUp ? -1 : 1); e.Handled = true; }
+        else if (tabNumber > 0) { ViewModel.SelectTabNumber(tabNumber); e.Handled = true; }
+        else if (ctrl && !shift && key == Key.D) { ViewModel.AddBookmarkCommand.Execute(null); e.Handled = true; }
+        else if (ctrl && !shift && key == Key.H) { e.Handled = true; OpenLibrary(); }
+        else if (ctrl && !shift && key == Key.J) { new DownloadsWindow(ViewModel.Services.Downloads).Show(); e.Handled = true; }
+        else if (alt && key == Key.Left) { ViewModel.SelectedTab?.BackCommand.Execute(null); e.Handled = true; }
+        else if (alt && key == Key.Right) { ViewModel.SelectedTab?.ForwardCommand.Execute(null); e.Handled = true; }
+        else if (key == Key.F12) { OpenDeveloperTools(); e.Handled = true; }
+        else if (key == Key.F9) { ViewModel.SelectedTab?.ToggleReaderModeCommand.Execute(null); e.Handled = true; }
+        else if (key == Key.F11) { ToggleFullscreen(); e.Handled = true; }
+        else if (shift && key == Key.Escape) { new TaskManagerWindow(ViewModel).Show(); e.Handled = true; }
+    }
+
+    private static int TabNumberFromKey(Key key) => key switch
+    {
+        >= Key.D1 and <= Key.D9 => key - Key.D1 + 1,
+        >= Key.NumPad1 and <= Key.NumPad9 => key - Key.NumPad1 + 1,
+        _ => 0
+    };
+
+    private async void OpenLibrary()
+    {
+        await ViewModel.Services.EnsureBackgroundInitializedAsync();
+        new LibraryWindow(ViewModel).ShowDialog();
     }
 
     private void MenuButton_Click(object sender, RoutedEventArgs e)
@@ -432,7 +466,7 @@ public partial class MainWindow : Window
         var dialog = new ClearDataWindow(ViewModel.Services.Settings.Current.Privacy.ClearOnExitItems) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         await ViewModel.Services.Privacy.ClearAsync(dialog.Selection);
-        ViewModel.SelectedTab!.Status = LocalizationService.Text("ClearComplete");
+        if (ViewModel.SelectedTab is { } tab) tab.Status = LocalizationService.Text("ClearComplete");
     }
 
     private void MediaButton_Click(object sender, RoutedEventArgs e)
@@ -592,20 +626,49 @@ public partial class MainWindow : Window
 
     private void Browser_ShortcutRequested(object? sender, BrowserShortcutEventArgs e)
     {
-        if (e.Shortcut == BrowserShortcut.Find)
+        switch (e.Shortcut)
         {
-            e.Handled = true;
-            Dispatcher.BeginInvoke(new Action(() => ShowFind(e.Tab)));
-        }
-        else if (e.Shortcut == BrowserShortcut.CloseSplit && _splitTab is not null)
-        {
-            e.Handled = true;
-            Dispatcher.BeginInvoke(new Action(CloseSplit));
-        }
-        else if (e.Shortcut == BrowserShortcut.TaskManager)
-        {
-            e.Handled = true;
-            Dispatcher.BeginInvoke(new Action(() => new TaskManagerWindow(ViewModel).Show()));
+            case BrowserShortcut.Find:
+                e.Handled = true;
+                Dispatcher.BeginInvoke(new Action(() => ShowFind(e.Tab)));
+                break;
+            case BrowserShortcut.CloseSplit when _splitTab is not null:
+                e.Handled = true;
+                Dispatcher.BeginInvoke(new Action(CloseSplit));
+                break;
+            case BrowserShortcut.TaskManager:
+                e.Handled = true;
+                Dispatcher.BeginInvoke(new Action(() => new TaskManagerWindow(ViewModel).Show()));
+                break;
+            case BrowserShortcut.NextTab:
+                e.Handled = true;
+                Dispatcher.BeginInvoke(new Action(() => ViewModel.SelectAdjacentTab(1)));
+                break;
+            case BrowserShortcut.PreviousTab:
+                e.Handled = true;
+                Dispatcher.BeginInvoke(new Action(() => ViewModel.SelectAdjacentTab(-1)));
+                break;
+            case BrowserShortcut.SelectTabNumber:
+                e.Handled = true;
+                var number = e.TabNumber;
+                Dispatcher.BeginInvoke(new Action(() => ViewModel.SelectTabNumber(number)));
+                break;
+            case BrowserShortcut.ToggleBookmark:
+                e.Handled = true;
+                Dispatcher.BeginInvoke(new Action(() => ViewModel.AddBookmarkCommand.Execute(null)));
+                break;
+            case BrowserShortcut.ReopenClosedTab:
+                e.Handled = true;
+                Dispatcher.BeginInvoke(new Action(() => ViewModel.ReopenClosedTabCommand.Execute(null)));
+                break;
+            case BrowserShortcut.Library:
+                e.Handled = true;
+                Dispatcher.BeginInvoke(new Action(OpenLibrary));
+                break;
+            case BrowserShortcut.Downloads:
+                e.Handled = true;
+                Dispatcher.BeginInvoke(new Action(() => new DownloadsWindow(ViewModel.Services.Downloads).Show()));
+                break;
         }
     }
 

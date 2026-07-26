@@ -1,0 +1,63 @@
+name: Release
+
+# Pushing a version tag (or publishing a GitHub Release for one) builds the
+# three single-file architectures after the boundary tests pass, generates the
+# SHA-256 manifest, and attaches everything to the GitHub Release for that tag.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re)publish, e.g. v2.2.2'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        run: dotnet restore ZZZ.sln
+      - name: Run privacy and permission boundary tests
+        run: dotnet run --project tests/ZZZ.BoundaryTests/ZZZ.BoundaryTests.csproj -c Release
+      - name: Build x64
+        run: dotnet build ZZZ/ZZZ.csproj -c Release -p:PlatformTarget=x64 -p:OutputPath=${{ github.workspace }}/artifacts/win-x64/
+      - name: Build x86
+        run: dotnet build ZZZ/ZZZ.csproj -c Release -p:PlatformTarget=x86 -p:OutputPath=${{ github.workspace }}/artifacts/win-x86/
+      - name: Build ARM64
+        run: dotnet build ZZZ/ZZZ.csproj -c Release -p:PlatformTarget=ARM64 -p:OutputPath=${{ github.workspace }}/artifacts/win-arm64/
+      - name: Collect release assets
+        shell: pwsh
+        run: |
+          $tag = $env:RELEASE_TAG
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item artifacts/win-x64/ZZZ.exe   "release/ZZZ-$tag-win-x64.exe"
+          Copy-Item artifacts/win-x86/ZZZ.exe   "release/ZZZ-$tag-win-x86.exe"
+          Copy-Item artifacts/win-arm64/ZZZ.exe "release/ZZZ-$tag-win-arm64.exe"
+          $lines = Get-ChildItem release/*.exe | Sort-Object Name | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+          }
+          Set-Content -Path "release/ZZZ-$tag-SHA256SUMS.txt" -Value ($lines -join "`n") -Encoding ascii
+          Get-ChildItem release | Format-Table Name, Length
+      - name: Attach assets to the GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:RELEASE_TAG
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --title "ZZZ $tag" --notes "See CHANGELOG.md for details." --draft=false
+          }
+          gh release upload $tag (Get-ChildItem release/* | ForEach-Object FullName) --repo $env:GITHUB_REPOSITORY --clobber

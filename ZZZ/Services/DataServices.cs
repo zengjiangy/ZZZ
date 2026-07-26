@@ -574,15 +574,25 @@ public interface IHistoryService
     void StopRecording();
     Task LoadAsync();
     Task AddAsync(string title, string url);
+    Task FlushAsync();
     Task RemoveAsync(HistoryEntry item);
     Task ClearAsync();
 }
 
 public sealed class HistoryService : IHistoryService
 {
+    // Visiting a page used to re-encrypt and rewrite the entire history file
+    // (up to 3000 entries) on every navigation. Additions now only mark the
+    // in-memory list dirty and a single background flush persists them a few
+    // seconds later; privacy-relevant operations (remove/clear) still write
+    // through immediately, and shutdown calls FlushAsync before the exit
+    // cleanup so at most this delay window is ever at risk in a hard crash.
+    private static readonly TimeSpan FlushDelay = TimeSpan.FromSeconds(3);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private List<HistoryEntry> _items = [];
     private volatile bool _recordingEnabled = true;
+    private bool _dirty;
+    private int _flushScheduled;
     public IReadOnlyList<HistoryEntry> Items => _items;
     public void StopRecording() => _recordingEnabled = false;
     public async Task LoadAsync()
@@ -600,21 +610,54 @@ public sealed class HistoryService : IHistoryService
             if (!_recordingEnabled) return;
             _items.Insert(0, new HistoryEntry { Title = title, Url = url });
             if (_items.Count > 3000) _items.RemoveRange(3000, _items.Count - 3000);
+            _dirty = true;
+        }
+        finally { _gate.Release(); }
+        ScheduleFlush();
+    }
+    public async Task FlushAsync()
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            if (!_dirty) return;
             await ProtectedJsonFiles.SaveAsync(AppPaths.History, "history", _items);
+            _dirty = false;
         }
         finally { _gate.Release(); }
     }
     public async Task RemoveAsync(HistoryEntry item)
     {
         await _gate.WaitAsync();
-        try { if (_items.Remove(item)) await ProtectedJsonFiles.SaveAsync(AppPaths.History, "history", _items); }
+        try
+        {
+            if (!_items.Remove(item) && !_dirty) return;
+            await ProtectedJsonFiles.SaveAsync(AppPaths.History, "history", _items);
+            _dirty = false;
+        }
         finally { _gate.Release(); }
     }
     public async Task ClearAsync()
     {
         await _gate.WaitAsync();
-        try { _items.Clear(); await ProtectedJsonFiles.SaveAsync(AppPaths.History, "history", _items); }
+        try
+        {
+            _items.Clear();
+            await ProtectedJsonFiles.SaveAsync(AppPaths.History, "history", _items);
+            _dirty = false;
+        }
         finally { _gate.Release(); }
+    }
+    private void ScheduleFlush()
+    {
+        if (Interlocked.CompareExchange(ref _flushScheduled, 1, 0) != 0) return;
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(FlushDelay); }
+            finally { Volatile.Write(ref _flushScheduled, 0); }
+            try { await FlushAsync(); }
+            catch { /* The next change or the shutdown flush retries. */ }
+        });
     }
 }
 
@@ -864,7 +907,7 @@ public sealed class UserScriptService : IUserScriptService
             Architecture.Arm64 => "Windows NT 10.0; ARM64",
             _ => "Windows NT 10.0; Win64; x64"
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 ZZZ/2.2.1");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 ({platform}) AppleWebKit/537.36 Chrome/124.0 Safari/537.36 {AppVersion.UserAgentProduct}");
         return client;
     }
 }
