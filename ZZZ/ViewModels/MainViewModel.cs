@@ -188,6 +188,33 @@ public partial class MainViewModel : ObservableObject
     private void DuplicateTab(BrowserTabViewModel tab) => CreateTab(tab.Url, tab.IsPrivate, tab.WorkspaceId);
 
     [RelayCommand]
+    private void ReopenClosedTab()
+    {
+        var entry = _services.Tabs.PopRecentlyClosed();
+        if (entry is null) return;
+        var workspace = _services.Workspaces.Find(entry.WorkspaceId);
+        // Follow the reopened tab into its workspace like mainstream browsers;
+        // a deleted workspace falls back to the currently active one.
+        if (workspace is not null && !ReferenceEquals(workspace, ActiveWorkspace)) ActiveWorkspace = workspace;
+        CreateTab(entry.Url, false, workspace?.Id);
+    }
+
+    public void SelectAdjacentTab(int direction)
+    {
+        if (WorkspaceTabs.Count < 2) return;
+        var index = SelectedTab is { } current ? WorkspaceTabs.IndexOf(current) : -1;
+        var next = index < 0 ? 0 : (index + direction + WorkspaceTabs.Count) % WorkspaceTabs.Count;
+        SelectedTab = WorkspaceTabs[next];
+    }
+
+    public void SelectTabNumber(int number)
+    {
+        if (WorkspaceTabs.Count == 0) return;
+        if (number == 9) { SelectedTab = WorkspaceTabs[WorkspaceTabs.Count - 1]; return; }
+        if (number >= 1 && number <= WorkspaceTabs.Count) SelectedTab = WorkspaceTabs[number - 1];
+    }
+
+    [RelayCommand]
     private void CloseOthers(BrowserTabViewModel tab)
     {
         _services.Tabs.CloseOthers(tab);
