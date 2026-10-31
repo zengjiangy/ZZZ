@@ -289,7 +289,7 @@ public partial class MainViewModel : ObservableObject
         UpdateBookmarkState();
     }
 
-    public async Task ReapplySettingsAsync()
+    public async Task ReapplySettingsAsync(bool reloadPages = false)
     {
         LocalizationService.Apply(_services.Settings.Current.Ui.Language);
         ThemeService.Apply(_services.Settings.Current.Appearance, _services.Settings.Current.StartPage, _services.Settings.Current.Ui.GrayscaleMode);
@@ -300,7 +300,7 @@ public partial class MainViewModel : ObservableObject
             ClearPendingSession();
             await Task.WhenAll(_services.Session.ClearAsync(), _services.Workspaces.ClearTabsAsync());
         }
-        await _services.Browser.ApplyCurrentSettingsAsync(reloadPages: true);
+        await _services.Browser.ApplyCurrentSettingsAsync(reloadPages);
         foreach (var tab in Tabs.Where(x => x.IsStartPage)) tab.RefreshStartPage();
         NotifyTabLayout();
         OnPropertyChanged(nameof(Services));
@@ -345,6 +345,12 @@ public partial class MainViewModel : ObservableObject
         WorkspaceTabs.Clear();
         foreach (var tab in Tabs.Where(x => string.Equals(x.WorkspaceId, activeId, StringComparison.OrdinalIgnoreCase))) WorkspaceTabs.Add(tab);
         if (desired is not null && WorkspaceTabs.Contains(desired)) SelectedTab = desired;
+    }
+
+    public void RefreshChromeLayout()
+    {
+        NotifyTabLayout();
+        OnPropertyChanged(nameof(Services));
     }
 
     private void NotifyTabLayout()

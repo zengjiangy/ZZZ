@@ -6,7 +6,7 @@
 
 ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、WPF 和 Microsoft WebView2 构建。它使用系统中的 WebView2 Runtime，不额外捆绑 Chromium，并支持把浏览器数据存放在程序目录中，方便随身携带。
 
-当前版本：**2.2.2**
+当前版本：**2.3.0**
 
 ## 下载与运行
 
@@ -14,9 +14,9 @@ ZZZ 是一款精简、开源的 Windows 浏览器，基于 .NET Framework 4.8、
 
 | 文件 | 适用平台 |
 |---|---|
-| `ZZZ-v2.2.2-win-x64.exe` | Windows x64 原生版本 |
-| `ZZZ-v2.2.2-win-x86.exe` | Windows 10 x86 32 位兼容版；也可在 Windows 10 on Arm 上以 x86 仿真运行 |
-| `ZZZ-v2.2.2-win-arm64.exe` | Windows ARM64 原生版本 |
+| `ZZZ-v2.3.0-win-x64.exe` | Windows x64 原生版本 |
+| `ZZZ-v2.3.0-win-x86.exe` | Windows 10 x86 32 位兼容版；也可在 Windows 10 on Arm 上以 x86 仿真运行 |
+| `ZZZ-v2.3.0-win-arm64.exe` | Windows ARM64 原生版本 |
 
 下载后直接运行即可，无需安装。系统需要：
 
@@ -108,12 +108,15 @@ WinGet 社区仓库收录申请正在 [microsoft/winget-pkgs#402023](https://git
 
 ## 快捷键
 
+以下为默认快捷键。可在“设置 → 快捷键”中重新录入、清除或恢复默认；网页获得焦点时同样生效。右上角菜单可在“设置 → 菜单”中调整显隐和顺序。
+
 | 快捷键 | 功能 |
 |---|---|
 | `Ctrl+T` | 新建标签页 |
 | `Ctrl+Shift+N` | 新建隐私标签页 |
 | `Ctrl+W` | 关闭当前标签页 |
-| `Ctrl+L` / `Alt+D` | 聚焦地址栏 |
+| `Ctrl+L` / `Alt+D` | 恢复并聚焦地址栏 |
+| `Ctrl+Shift+F10` | 恢复标签栏、工具栏和地址栏 |
 | `Ctrl+R` / `F5` | 刷新页面 |
 | `Ctrl+P` | 打印页面 |
 | `Ctrl+F` | 在页面中查找 |

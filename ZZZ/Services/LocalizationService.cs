@@ -8,6 +8,7 @@ public sealed class LanguageOption
     public LanguageOption(string code, string displayName) { Code = code; DisplayName = displayName; }
     public string Code { get; }
     public string DisplayName { get; }
+    public override string ToString() => DisplayName;
 }
 
 public sealed class SettingChoice<T> where T : struct, Enum
@@ -15,6 +16,7 @@ public sealed class SettingChoice<T> where T : struct, Enum
     public SettingChoice(T value, string label) { Value = value; Label = label; }
     public T Value { get; }
     public string Label { get; }
+    public override string ToString() => Label;
 }
 
 public static class LocalizationService

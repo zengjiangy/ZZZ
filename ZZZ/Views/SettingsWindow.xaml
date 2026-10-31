@@ -1,117 +1,144 @@
 <Window x:Class="ZZZ.Views.SettingsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Style="{StaticResource AppWindowStyle}"
-        Title="{DynamicResource SettingsTitle}" Height="690" Width="760" MinHeight="560" MinWidth="650" WindowStartupLocation="CenterOwner">
+        Title="{DynamicResource SettingsTitle}" Height="740" Width="1000" MinHeight="600" MinWidth="860" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <Style x:Key="SettingsNavItem" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="13,11"/><Setter Property="Margin" Value="0,2"/><Setter Property="MinWidth" Value="152"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">
+                <Border x:Name="Nav" Background="{TemplateBinding Background}" CornerRadius="9" Padding="{TemplateBinding Padding}" Margin="{TemplateBinding Margin}">
+                    <ContentPresenter ContentSource="Header" HorizontalAlignment="Left" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Nav" Property="Background" Value="{DynamicResource HoverBrush}"/></Trigger>
+                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="Nav" Property="Background" Value="{DynamicResource AccentSoftBrush}"/><Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock"><Setter Property="FontSize" Value="20"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Margin" Value="0,0,0,5"/></Style>
+        <Style x:Key="SectionHint" TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Margin" Value="0,0,0,16"/></Style>
+        <Style x:Key="GroupBorder" TargetType="Border"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="12"/><Setter Property="Padding" Value="16"/><Setter Property="Margin" Value="0,0,0,14"/></Style>
+        <Style x:Key="GroupTitle" TargetType="TextBlock"><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="FontSize" Value="14"/><Setter Property="Margin" Value="0,0,0,9"/></Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock"><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Margin" Value="0,10,0,2"/></Style>
+    </Window.Resources>
     <Grid Background="{DynamicResource WindowBrush}">
         <Grid.RowDefinitions><RowDefinition Height="70"/><RowDefinition Height="*"/><RowDefinition Height="64"/></Grid.RowDefinitions>
         <Border Background="{DynamicResource ChromeBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" Margin="22,0" VerticalAlignment="Center">
                 <Border Width="36" Height="36" Background="{DynamicResource AppIconBrush}" CornerRadius="11" Margin="0,0,12,0"><Viewbox Margin="8"><Path Stroke="White" StrokeThickness="2.6" Data="M2,4 L16,4 L4,16 L18,16 M9,10 L18,10 L11,17"/></Viewbox></Border>
-                <StackPanel><TextBlock Text="{DynamicResource SettingsTitle}" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="{DynamicResource AppName}" Foreground="{DynamicResource MutedBrush}"/></StackPanel>
+                <StackPanel><TextBlock Text="{DynamicResource SettingsTitle}" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="{DynamicResource SettingsSubtitle}" Foreground="{DynamicResource MutedBrush}"/></StackPanel>
             </StackPanel>
         </Border>
-        <TabControl x:Name="SettingsTabs" Grid.Row="1" Margin="18,14,18,0">
-            <TabItem Header="{DynamicResource General}"><ScrollViewer><StackPanel Margin="20" MaxWidth="610">
-                <TextBlock Text="{DynamicResource Language}" FontWeight="SemiBold"/><ComboBox x:Name="LanguageBox" DisplayMemberPath="DisplayName" SelectedValuePath="Code" SelectedValue="{Binding Ui.Language}"/>
-                <TextBlock Text="{DynamicResource LanguageHint}" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,16"/>
-                <TextBlock Text="{DynamicResource HomePageMode}" FontWeight="SemiBold"/><ComboBox x:Name="StartupPageModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding StartupPageMode}" Margin="0,6,0,14"/>
-                <TextBlock Text="{DynamicResource SearchEngine}" FontWeight="SemiBold"/><ComboBox x:Name="SearchEngineBox" DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue="{Binding ActiveSearchEngineId}"/>
-                <TextBlock Text="{DynamicResource SearchEnginesHint}" Foreground="{DynamicResource MutedBrush}" Margin="0,9,0,4"/>
-                <DataGrid x:Name="SearchGrid" ItemsSource="{Binding SearchEngines}" AutoGenerateColumns="False" CanUserAddRows="True" MinHeight="150"><DataGrid.Columns><DataGridTextColumn Header="{DynamicResource Name}" Binding="{Binding Name}" Width="140"/><DataGridTextColumn Header="{DynamicResource UrlTemplate}" Binding="{Binding UrlTemplate}" Width="*"/></DataGrid.Columns></DataGrid>
-                <TextBlock Text="{DynamicResource TabSleep}" FontWeight="SemiBold" Margin="0,14,0,4"/><TextBox Text="{Binding Browser.SleepBackgroundTabsAfterMinutes}" Width="100" HorizontalAlignment="Left"/>
-                <Border Background="{DynamicResource AddressBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,14,0,0"><StackPanel>
+        <TabControl x:Name="SettingsTabs" Grid.Row="1" Margin="18,12,18,0" TabStripPlacement="Left">
+            <TabItem Header="{DynamicResource General}" Style="{StaticResource SettingsNavItem}"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="24,18,24,24" MaxWidth="700">
+                <TextBlock Text="{DynamicResource General}" Style="{StaticResource SectionTitle}"/><TextBlock Text="{DynamicResource GeneralHint}" Style="{StaticResource SectionHint}"/>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel>
+                    <TextBlock Text="{DynamicResource Language}" Style="{StaticResource GroupTitle}"/><ComboBox x:Name="LanguageBox" DisplayMemberPath="DisplayName" SelectedValuePath="Code" SelectedValue="{Binding Ui.Language}"/>
+                    <TextBlock Text="{DynamicResource LanguageHint}" Foreground="{DynamicResource MutedBrush}" Margin="0,2,0,5"/>
+                    <TextBlock Text="{DynamicResource HomePageMode}" Style="{StaticResource FieldLabel}"/><ComboBox x:Name="StartupPageModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding StartupPageMode}"/>
+                    <TextBlock Text="{DynamicResource SearchEngine}" Style="{StaticResource FieldLabel}"/><ComboBox x:Name="SearchEngineBox" DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue="{Binding ActiveSearchEngineId}"/>
+                    <TextBlock Text="{DynamicResource SearchEnginesHint}" Foreground="{DynamicResource MutedBrush}" Margin="0,9,0,4"/>
+                    <DataGrid x:Name="SearchGrid" ItemsSource="{Binding SearchEngines}" AutoGenerateColumns="False" CanUserAddRows="True" MinHeight="150"><DataGrid.Columns><DataGridTextColumn Header="{DynamicResource Name}" Binding="{Binding Name}" Width="140"/><DataGridTextColumn Header="{DynamicResource UrlTemplate}" Binding="{Binding UrlTemplate}" Width="*"/></DataGrid.Columns></DataGrid>
+                </StackPanel></Border>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel>
+                    <TextBlock Text="{DynamicResource SessionAndPerformance}" Style="{StaticResource GroupTitle}"/>
+                    <TextBlock Text="{DynamicResource TabSleep}"/><TextBox Text="{Binding Browser.SleepBackgroundTabsAfterMinutes}" Width="110" HorizontalAlignment="Left" Margin="0,5"/>
                     <CheckBox Content="{DynamicResource RestoreLastSessionSetting}" IsChecked="{Binding Browser.RestoreLastSession}" FontWeight="SemiBold"/>
                     <TextBlock Text="{DynamicResource RestoreLastSessionHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="26,2,0,0"/>
                 </StackPanel></Border>
             </StackPanel></ScrollViewer></TabItem>
-            <TabItem Header="{DynamicResource Appearance}"><ScrollViewer><StackPanel Margin="20" MaxWidth="610">
-                <TextBlock Text="{DynamicResource Theme}" FontWeight="SemiBold"/><ComboBox x:Name="AppearanceBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Appearance}"/>
-                <Border Background="{DynamicResource AddressBrush}" CornerRadius="10" Padding="14" Margin="0,12,0,18" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"><StackPanel>
-                    <CheckBox Content="{DynamicResource ShowTabBar}" IsChecked="{Binding Ui.ShowTabBar}"/><CheckBox Content="{DynamicResource UseVerticalTabs}" IsChecked="{Binding Ui.UseVerticalTabs}" Margin="0,6,0,0"/><TextBlock Text="{DynamicResource VerticalTabsHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="26,2,0,7"/><CheckBox Content="{DynamicResource ShowToolbar}" IsChecked="{Binding Ui.ShowToolbar}"/><CheckBox Content="{DynamicResource ShowAddressBar}" IsChecked="{Binding Ui.ShowAddressBar}"/>
+
+            <TabItem Header="{DynamicResource Appearance}" Style="{StaticResource SettingsNavItem}"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="24,18,24,24" MaxWidth="700">
+                <TextBlock Text="{DynamicResource Appearance}" Style="{StaticResource SectionTitle}"/><TextBlock Text="{DynamicResource AppearanceHint}" Style="{StaticResource SectionHint}"/>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel>
+                    <TextBlock Text="{DynamicResource Theme}" Style="{StaticResource GroupTitle}"/><ComboBox x:Name="AppearanceBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Appearance}"/>
+                    <TextBlock Text="{DynamicResource WebDarkMode}" Style="{StaticResource FieldLabel}"/><ComboBox x:Name="WebDarkModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Advanced.WebDarkMode}"/>
+                    <TextBlock Text="{DynamicResource WebDarkHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                    <CheckBox Content="{DynamicResource GrayscaleMode}" IsChecked="{Binding Ui.GrayscaleMode}" Click="GrayscaleMode_Click" Margin="0,12,0,0"/>
                 </StackPanel></Border>
-                <TextBlock Text="{DynamicResource WebDarkMode}" FontWeight="SemiBold"/><ComboBox x:Name="WebDarkModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Advanced.WebDarkMode}"/>
-                <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="9" Padding="12" Margin="0,7,0,0"><TextBlock Text="{DynamicResource WebDarkHint}" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap"/></Border>
-                <Border Background="{DynamicResource AddressBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,12,0,0"><StackPanel>
-                    <CheckBox Content="{DynamicResource GrayscaleMode}" IsChecked="{Binding Ui.GrayscaleMode}" FontWeight="SemiBold" Click="GrayscaleMode_Click"/>
-                    <TextBlock Text="{DynamicResource GrayscaleHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="26,2,0,0"/>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel>
+                    <TextBlock Text="{DynamicResource BrowserChrome}" Style="{StaticResource GroupTitle}"/>
+                    <CheckBox Content="{DynamicResource ShowTabBar}" IsChecked="{Binding Ui.ShowTabBar}"/><CheckBox Content="{DynamicResource UseVerticalTabs}" IsChecked="{Binding Ui.UseVerticalTabs}"/>
+                    <CheckBox Content="{DynamicResource ShowToolbar}" IsChecked="{Binding Ui.ShowToolbar}"/><CheckBox Content="{DynamicResource ShowAddressBar}" IsChecked="{Binding Ui.ShowAddressBar}"/>
+                    <TextBlock Text="{DynamicResource RestoreInterfaceHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
                 </StackPanel></Border>
-                <TextBlock Text="{DynamicResource StartPageBackground}" FontWeight="SemiBold" Margin="0,18,0,4"/>
-                <Grid Margin="0,2,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <Border x:Name="BackgroundColorPreview" Width="34" Height="34" CornerRadius="8" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"/>
-                    <TextBox x:Name="BackgroundColorBox" Grid.Column="1" Text="{Binding StartPage.BackgroundColor, UpdateSourceTrigger=PropertyChanged}" ToolTip="#101826" TextChanged="BackgroundColorBox_TextChanged" VerticalContentAlignment="Center"/>
-                    <Button Grid.Column="2" Content="{DynamicResource ChooseColor}" Click="ChooseBackgroundColor_Click" Margin="8,0,0,0"/>
-                </Grid>
-                <WrapPanel Margin="0,8,0,0">
-                    <Button Tag="#101826" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#101826" ToolTip="#101826"/>
-                    <Button Tag="#172554" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#172554" ToolTip="#172554"/>
-                    <Button Tag="#312E81" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#312E81" ToolTip="#312E81"/>
-                    <Button Tag="#3F1D38" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#3F1D38" ToolTip="#3F1D38"/>
-                    <Button Tag="#0F3D3E" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#0F3D3E" ToolTip="#0F3D3E"/>
-                    <Button Tag="#F3F4F6" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#F3F4F6" ToolTip="#F3F4F6"/>
-                    <Button Tag="#DC2626" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#DC2626" ToolTip="#DC2626"/>
-                    <Button Tag="#EA580C" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#EA580C" ToolTip="#EA580C"/>
-                    <Button Tag="#EAB308" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#EAB308" ToolTip="#EAB308"/>
-                    <Button Tag="#86EFAC" Click="PresetBackgroundColor_Click" Width="32" Height="26" Background="#86EFAC" ToolTip="#86EFAC"/>
-                </WrapPanel>
-                <DockPanel Margin="0,8,0,0"><Button DockPanel.Dock="Right" Content="{DynamicResource RestoreDefaultBackground}" Click="ResetBackground_Click" Margin="8,0,0,0"/><Button DockPanel.Dock="Right" Content="{DynamicResource Browse}" Click="BrowseBackground_Click" Margin="8,0,0,0"/><TextBox x:Name="BackgroundImageBox" Text="{Binding StartPage.BackgroundImage}" IsReadOnly="True"/></DockPanel>
-                <TextBlock Text="{DynamicResource BackgroundOpacity}" Margin="0,10,0,2"/><Slider Minimum="0.1" Maximum="1" TickFrequency="0.1" IsSnapToTickEnabled="True" Value="{Binding StartPage.BackgroundOpacity}"/>
-                <CheckBox Content="{DynamicResource ShowBookmarksOnStart}" IsChecked="{Binding StartPage.ShowBookmarks}" Margin="0,10,0,0"/>
-                <TextBlock Text="{DynamicResource BookmarkStyle}" FontWeight="SemiBold" Margin="0,12,0,2"/><ComboBox x:Name="BookmarkStyleBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding StartPage.BookmarkStyle}"/>
-                <TextBlock Text="{DynamicResource BookmarkTileWidth}" Margin="0,10,0,2"/><Slider Minimum="100" Maximum="260" TickFrequency="10" IsSnapToTickEnabled="True" Value="{Binding StartPage.BookmarkTileWidth}"/>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel>
+                    <TextBlock Text="{DynamicResource StartPageBackground}" Style="{StaticResource GroupTitle}"/>
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Border x:Name="BackgroundColorPreview" Width="34" Height="34" CornerRadius="8" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"/>
+                        <TextBox x:Name="BackgroundColorBox" Grid.Column="1" Text="{Binding StartPage.BackgroundColor, UpdateSourceTrigger=PropertyChanged}" ToolTip="#101826" TextChanged="BackgroundColorBox_TextChanged" VerticalContentAlignment="Center"/>
+                        <Button Grid.Column="2" Content="{DynamicResource ChooseColor}" Click="ChooseBackgroundColor_Click" Margin="8,0,0,0"/>
+                    </Grid>
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Tag="#101826" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#101826" ToolTip="#101826"/><Button Tag="#172554" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#172554" ToolTip="#172554"/><Button Tag="#312E81" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#312E81" ToolTip="#312E81"/><Button Tag="#3F1D38" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#3F1D38" ToolTip="#3F1D38"/><Button Tag="#0F3D3E" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#0F3D3E" ToolTip="#0F3D3E"/><Button Tag="#F3F4F6" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#F3F4F6" ToolTip="#F3F4F6"/><Button Tag="#DC2626" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#DC2626" ToolTip="#DC2626"/><Button Tag="#EA580C" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#EA580C" ToolTip="#EA580C"/><Button Tag="#EAB308" Click="PresetBackgroundColor_Click" Width="32" Height="26" Margin="0,0,6,0" Background="#EAB308" ToolTip="#EAB308"/><Button Tag="#86EFAC" Click="PresetBackgroundColor_Click" Width="32" Height="26" Background="#86EFAC" ToolTip="#86EFAC"/>
+                    </WrapPanel>
+                    <DockPanel Margin="0,8,0,0"><Button DockPanel.Dock="Right" Content="{DynamicResource RestoreDefaultBackground}" Click="ResetBackground_Click" Margin="8,0,0,0"/><Button DockPanel.Dock="Right" Content="{DynamicResource Browse}" Click="BrowseBackground_Click" Margin="8,0,0,0"/><TextBox x:Name="BackgroundImageBox" Text="{Binding StartPage.BackgroundImage}" IsReadOnly="True"/></DockPanel>
+                    <TextBlock Text="{DynamicResource BackgroundOpacity}" Style="{StaticResource FieldLabel}"/><Slider Minimum="0.1" Maximum="1" TickFrequency="0.1" IsSnapToTickEnabled="True" Value="{Binding StartPage.BackgroundOpacity}"/>
+                    <CheckBox Content="{DynamicResource ShowBookmarksOnStart}" IsChecked="{Binding StartPage.ShowBookmarks}"/>
+                    <TextBlock Text="{DynamicResource BookmarkStyle}" Style="{StaticResource FieldLabel}"/><ComboBox x:Name="BookmarkStyleBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding StartPage.BookmarkStyle}"/>
+                    <TextBlock Text="{DynamicResource BookmarkTileWidth}" Style="{StaticResource FieldLabel}"/><Slider Minimum="100" Maximum="260" TickFrequency="10" IsSnapToTickEnabled="True" Value="{Binding StartPage.BookmarkTileWidth}"/>
+                </StackPanel></Border>
             </StackPanel></ScrollViewer></TabItem>
-            <TabItem Header="{DynamicResource Privacy}"><ScrollViewer><StackPanel Margin="20" MaxWidth="610">
-                <CheckBox Content="{DynamicResource SendDnt}" IsChecked="{Binding Privacy.SendDoNotTrack}"/><CheckBox Content="{DynamicResource SendGpc}" IsChecked="{Binding Privacy.SendGlobalPrivacyControl}"/><CheckBox Content="{DynamicResource DisableWebRtc}" IsChecked="{Binding Privacy.DisableWebRtc}"/><CheckBox Content="{DynamicResource BlockThirdPartyCookies}" IsChecked="{Binding Privacy.BlockThirdPartyCookies}"/><CheckBox Content="{DynamicResource StrictPrivateTabs}" IsChecked="{Binding Privacy.StrictPrivateTabs}"/>
-                <TextBlock Text="{DynamicResource LocationPermission}" FontWeight="SemiBold" Margin="0,16,0,2"/><ComboBox x:Name="LocationBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Privacy.LocationPermission}"/>
-                <Border Background="{DynamicResource AddressBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,8,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <TextBlock Text="{DynamicResource Latitude}"/><TextBlock Grid.Column="2" Text="{DynamicResource Longitude}"/><TextBox Grid.Row="1" Text="{Binding Privacy.CustomLatitude}"/><TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Privacy.CustomLongitude}"/><TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="{DynamicResource AccuracyMeters}" Margin="0,8,0,0"/><TextBox Grid.Row="3" Grid.ColumnSpan="3" Text="{Binding Privacy.CustomLocationAccuracy}"/>
+
+            <TabItem Header="{DynamicResource MenuCustomization}" Style="{StaticResource SettingsNavItem}"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="24,18,24,24" MaxWidth="700">
+                <TextBlock Text="{DynamicResource MenuCustomization}" Style="{StaticResource SectionTitle}"/><TextBlock Text="{DynamicResource MenuCustomizationHint}" Style="{StaticResource SectionHint}"/>
+                <Button Content="{DynamicResource ResetMenu}" Click="ResetMenu_Click" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                <Border Style="{StaticResource GroupBorder}" Padding="8"><ListBox x:Name="MenuActionList" Background="Transparent" BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate><DataTemplate><Grid MinHeight="43"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="42"/><ColumnDefinition Width="42"/></Grid.ColumnDefinitions>
+                        <CheckBox Content="{Binding Title}" IsChecked="{Binding Visible}" IsEnabled="{Binding IsOptional}" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="↑" Tag="{Binding}" Click="MoveMenuUp_Click" Width="34" Height="32" Padding="0" ToolTip="{DynamicResource MoveUp}"/><Button Grid.Column="2" Content="↓" Tag="{Binding}" Click="MoveMenuDown_Click" Width="34" Height="32" Padding="0" ToolTip="{DynamicResource MoveDown}"/>
+                    </Grid></DataTemplate></ListBox.ItemTemplate>
+                </ListBox></Border>
+            </StackPanel></ScrollViewer></TabItem>
+
+            <TabItem Header="{DynamicResource Shortcuts}" Style="{StaticResource SettingsNavItem}"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="24,18,24,24" MaxWidth="700">
+                <TextBlock Text="{DynamicResource Shortcuts}" Style="{StaticResource SectionTitle}"/><TextBlock Text="{DynamicResource ShortcutsHint}" Style="{StaticResource SectionHint}"/>
+                <Button Content="{DynamicResource ResetShortcuts}" Click="ResetShortcuts_Click" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                <Border Style="{StaticResource GroupBorder}" Padding="8"><ListBox x:Name="ShortcutActionList" Background="Transparent" BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate><DataTemplate><Grid MinHeight="48"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="220"/><ColumnDefinition Width="68"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center" Margin="7,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}"/>
+                        <TextBox Grid.Column="1" Text="{Binding Gesture, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True" PreviewKeyDown="ShortcutBox_PreviewKeyDown" Margin="4" Padding="9,6" ToolTip="{DynamicResource ShortcutCaptureHint}"/>
+                        <Button Grid.Column="2" Content="{DynamicResource ClearShortcut}" Tag="{Binding}" Click="ClearShortcut_Click" Margin="4" Padding="6,5"/>
+                    </Grid></DataTemplate></ListBox.ItemTemplate>
+                </ListBox></Border>
+            </StackPanel></ScrollViewer></TabItem>
+
+            <TabItem Header="{DynamicResource Privacy}" Style="{StaticResource SettingsNavItem}"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="24,18,24,24" MaxWidth="700">
+                <TextBlock Text="{DynamicResource Privacy}" Style="{StaticResource SectionTitle}"/><TextBlock Text="{DynamicResource PrivacyHint}" Style="{StaticResource SectionHint}"/>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel><TextBlock Text="{DynamicResource NetworkPrivacy}" Style="{StaticResource GroupTitle}"/><CheckBox Content="{DynamicResource SendDnt}" IsChecked="{Binding Privacy.SendDoNotTrack}"/><CheckBox Content="{DynamicResource SendGpc}" IsChecked="{Binding Privacy.SendGlobalPrivacyControl}"/><CheckBox Content="{DynamicResource DisableWebRtc}" IsChecked="{Binding Privacy.DisableWebRtc}"/><CheckBox Content="{DynamicResource BlockThirdPartyCookies}" IsChecked="{Binding Privacy.BlockThirdPartyCookies}"/><CheckBox Content="{DynamicResource StrictPrivateTabs}" IsChecked="{Binding Privacy.StrictPrivateTabs}"/></StackPanel></Border>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel>
+                    <TextBlock Text="{DynamicResource LocationPermission}" Style="{StaticResource GroupTitle}"/><ComboBox x:Name="LocationBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Privacy.LocationPermission}"/>
+                    <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <TextBlock Text="{DynamicResource Latitude}"/><TextBlock Grid.Column="2" Text="{DynamicResource Longitude}"/><TextBox Grid.Row="1" Text="{Binding Privacy.CustomLatitude}"/><TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Privacy.CustomLongitude}"/><TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="{DynamicResource AccuracyMeters}" Margin="0,8,0,0"/><TextBox Grid.Row="3" Grid.ColumnSpan="3" Text="{Binding Privacy.CustomLocationAccuracy}"/>
+                    </Grid>
+                    <TextBlock Text="{DynamicResource MediaPermission}" Style="{StaticResource FieldLabel}"/><ComboBox x:Name="MediaPermissionBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Privacy.CameraMicrophonePermission}"/>
+                </StackPanel></Border>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel><CheckBox Content="{DynamicResource ClearOnExit}" IsChecked="{Binding Privacy.ClearOnExit}"/><WrapPanel Margin="18,0,0,0"><CheckBox Content="{DynamicResource History}" IsChecked="{Binding Privacy.ClearOnExitItems.History}" Margin="0,5,18,5"/><CheckBox Content="{DynamicResource Cache}" IsChecked="{Binding Privacy.ClearOnExitItems.Cache}" Margin="0,5,18,5"/><CheckBox Content="{DynamicResource Cookies}" IsChecked="{Binding Privacy.ClearOnExitItems.Cookies}" Margin="0,5,18,5"/><CheckBox Content="{DynamicResource Passwords}" IsChecked="{Binding Privacy.ClearOnExitItems.Passwords}" Margin="0,5,18,5"/><CheckBox Content="{DynamicResource FormData}" IsChecked="{Binding Privacy.ClearOnExitItems.FormData}" Margin="0,5,18,5"/></WrapPanel></StackPanel></Border>
+            </StackPanel></ScrollViewer></TabItem>
+
+            <TabItem Header="{DynamicResource Downloads}" Style="{StaticResource SettingsNavItem}"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="24,18,24,24" MaxWidth="700">
+                <TextBlock Text="{DynamicResource Downloads}" Style="{StaticResource SectionTitle}"/><TextBlock Text="{DynamicResource DownloadsHint}" Style="{StaticResource SectionHint}"/>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel><TextBlock Text="{DynamicResource DownloadHandler}" Style="{StaticResource GroupTitle}"/><ComboBox x:Name="DownloadModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Downloads.Mode}"/><TextBlock Text="{DynamicResource ExternalDownloadCookieHint}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" Margin="0,8,0,0"/><TextBlock Text="{DynamicResource DownloadFolder}" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Downloads.Folder}"/><TextBlock Text="{DynamicResource ExternalDownloader}" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Downloads.ExternalCommand}"/><TextBlock Text="{DynamicResource ExternalArguments}" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Downloads.ExternalArguments}"/></StackPanel></Border>
+            </StackPanel></ScrollViewer></TabItem>
+
+            <TabItem Header="{DynamicResource Backup}" Style="{StaticResource SettingsNavItem}"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="24,18,24,24" MaxWidth="700">
+                <TextBlock Text="{DynamicResource PortableData}" Style="{StaticResource SectionTitle}"/><TextBlock Text="{DynamicResource BackupHint}" Style="{StaticResource SectionHint}"/>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel><TextBlock Text="{DynamicResource DataStorageMode}" Style="{StaticResource GroupTitle}"/><ComboBox x:Name="StorageModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Storage.Mode}"/><TextBlock Text="{DynamicResource CustomDataPath}" Style="{StaticResource FieldLabel}"/><DockPanel><Button DockPanel.Dock="Right" Content="{DynamicResource Browse}" Click="BrowseDataPath_Click" Margin="8,0,0,0"/><TextBox Text="{Binding Storage.CustomPath, UpdateSourceTrigger=PropertyChanged}"/></DockPanel><TextBlock x:Name="CurrentDataPathText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/></StackPanel></Border>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel><TextBlock Text="{DynamicResource BackupAndRestore}" Style="{StaticResource GroupTitle}"/><WrapPanel><Button Content="{DynamicResource ExportSettings}" Click="ExportSettings_Click" Margin="0,0,8,8"/><Button Content="{DynamicResource ImportSettings}" Click="ImportSettings_Click" Margin="0,0,0,8"/></WrapPanel><WrapPanel><Button Content="{DynamicResource ExportRules}" Click="ExportRules_Click" Margin="0,0,8,0"/><Button Content="{DynamicResource ImportRules}" Click="ImportRules_Click"/></WrapPanel></StackPanel></Border>
+            </StackPanel></ScrollViewer></TabItem>
+
+            <TabItem x:Name="AdvancedTab" Header="{DynamicResource Advanced}" Style="{StaticResource SettingsNavItem}"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="24,18,24,24" MaxWidth="700">
+                <TextBlock Text="{DynamicResource Advanced}" Style="{StaticResource SectionTitle}"/><TextBlock Text="{DynamicResource AdvancedHint}" Style="{StaticResource SectionHint}"/>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel><TextBlock Text="{DynamicResource ContentEnhancements}" Style="{StaticResource GroupTitle}"/><CheckBox Content="{DynamicResource EnableAdBlock}" IsChecked="{Binding Advanced.EnableAdBlock}"/><Button Content="{DynamicResource ManageAdBlock}" Click="ManageAdBlock_Click" HorizontalAlignment="Left" Background="{DynamicResource AccentSoftBrush}" Margin="18,0,0,5"/><CheckBox Content="{DynamicResource EnableSniffer}" IsChecked="{Binding Advanced.EnableResourceSniffer}"/><CheckBox Content="{DynamicResource EnableScripts}" IsChecked="{Binding Advanced.EnableUserScripts}"/><CheckBox Content="{DynamicResource EnableDevTools}" IsChecked="{Binding Advanced.EnableDeveloperTools}"/><TextBlock Text="{DynamicResource DevToolsHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="26,2,0,0"/></StackPanel></Border>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel><TextBlock Text="{DynamicResource UserAgent}" Style="{StaticResource GroupTitle}"/><ComboBox x:Name="UserAgentBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Browser.UserAgent}"/><TextBlock Text="{DynamicResource CustomUserAgent}" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Browser.CustomUserAgent}"/><TextBlock Text="{DynamicResource ExternalPlayer}" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Advanced.ExternalPlayerPath}"/></StackPanel></Border>
+                <Border Style="{StaticResource GroupBorder}"><StackPanel><TextBlock Text="{DynamicResource TranslationProvider}" Style="{StaticResource GroupTitle}"/><ComboBox x:Name="TranslationProviderBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Browser.TranslationProvider}"/><TextBlock Text="{DynamicResource TranslationTargetPreset}" Style="{StaticResource FieldLabel}"/><ComboBox x:Name="TranslationTargetBox" DisplayMemberPath="DisplayName" SelectedValuePath="Code" SelectionChanged="TranslationTargetBox_SelectionChanged"/><TextBox x:Name="CustomTranslationTargetBox" Margin="0,7,0,0" Visibility="Collapsed" ToolTip="{DynamicResource CustomLanguageCodeHint}"/><CheckBox Content="{DynamicResource AutoTranslate}" IsChecked="{Binding Browser.AutoTranslateForeignPages}"/></StackPanel></Border>
+            </StackPanel></ScrollViewer></TabItem>
+
+            <TabItem Header="{DynamicResource About}" Style="{StaticResource SettingsNavItem}"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="24,18,24,24" MaxWidth="700">
+                <TextBlock Text="ZZZ" Style="{StaticResource SectionTitle}"/>
+                <Border Style="{StaticResource GroupBorder}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="{DynamicResource ApplicationVersion}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutAppVersion" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/><TextBlock Grid.Row="1" Text="{DynamicResource WebViewRuntimeVersion}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutWebViewVersion" Grid.Row="1" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/><TextBlock Grid.Row="2" Text="{DynamicResource LocalBrowserFingerprint}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutFingerprint" Grid.Row="2" Grid.Column="1" Margin="0,5" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/><TextBlock Grid.Row="3" Text="{DynamicResource OperatingSystem}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutOperatingSystem" Grid.Row="3" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/><TextBlock Grid.Row="4" Text="{DynamicResource Architecture}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutArchitecture" Grid.Row="4" Grid.Column="1" Margin="0,5"/><TextBlock Grid.Row="5" Text="{DynamicResource Framework}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutFramework" Grid.Row="5" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/><TextBlock Grid.Row="6" Text="{DynamicResource ProcessorCount}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutProcessorCount" Grid.Row="6" Grid.Column="1" Margin="0,5"/><TextBlock Grid.Row="7" Text="{DynamicResource Language}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutLanguage" Grid.Row="7" Grid.Column="1" Margin="0,5"/><TextBlock Grid.Row="8" Text="{DynamicResource StorageLocation}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutStorage" Grid.Row="8" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
                 </Grid></Border>
-                <TextBlock Text="{DynamicResource MediaPermission}" FontWeight="SemiBold" Margin="0,12,0,2"/><ComboBox x:Name="MediaPermissionBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Privacy.CameraMicrophonePermission}"/>
-                <CheckBox Content="{DynamicResource ClearOnExit}" IsChecked="{Binding Privacy.ClearOnExit}" Margin="0,18,0,4"/>
-                <WrapPanel Margin="18,0,0,0"><CheckBox Content="{DynamicResource History}" IsChecked="{Binding Privacy.ClearOnExitItems.History}" Margin="0,5,18,5"/><CheckBox Content="{DynamicResource Cache}" IsChecked="{Binding Privacy.ClearOnExitItems.Cache}" Margin="0,5,18,5"/><CheckBox Content="{DynamicResource Cookies}" IsChecked="{Binding Privacy.ClearOnExitItems.Cookies}" Margin="0,5,18,5"/><CheckBox Content="{DynamicResource Passwords}" IsChecked="{Binding Privacy.ClearOnExitItems.Passwords}" Margin="0,5,18,5"/><CheckBox Content="{DynamicResource FormData}" IsChecked="{Binding Privacy.ClearOnExitItems.FormData}" Margin="0,5,18,5"/></WrapPanel>
-            </StackPanel></ScrollViewer></TabItem>
-            <TabItem x:Name="AdvancedTab" Header="{DynamicResource Advanced}"><ScrollViewer><StackPanel Margin="20" MaxWidth="610">
-                <Border Background="{DynamicResource AddressBrush}" CornerRadius="10" Padding="14" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"><StackPanel><CheckBox Content="{DynamicResource EnableAdBlock}" IsChecked="{Binding Advanced.EnableAdBlock}"/><Button Content="{DynamicResource ManageAdBlock}" Click="ManageAdBlock_Click" HorizontalAlignment="Left" Background="{DynamicResource AccentSoftBrush}" Margin="18,0,0,5"/><CheckBox Content="{DynamicResource EnableSniffer}" IsChecked="{Binding Advanced.EnableResourceSniffer}"/><CheckBox Content="{DynamicResource EnableScripts}" IsChecked="{Binding Advanced.EnableUserScripts}"/></StackPanel></Border>
-                <TextBlock Text="{DynamicResource DeveloperTools}" FontWeight="SemiBold" Margin="0,16,0,2"/>
-                <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="10" Padding="14" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"><StackPanel><CheckBox Content="{DynamicResource EnableDevTools}" IsChecked="{Binding Advanced.EnableDeveloperTools}"/><TextBlock Text="{DynamicResource DevToolsHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/></StackPanel></Border>
-                <TextBlock Text="{DynamicResource UserAgent}" FontWeight="SemiBold" Margin="0,16,0,2"/><ComboBox x:Name="UserAgentBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Browser.UserAgent}"/>
-                <TextBlock Text="{DynamicResource CustomUserAgent}" Margin="0,10,0,2"/><TextBox Text="{Binding Browser.CustomUserAgent}"/>
-                <TextBlock Text="{DynamicResource TranslationProvider}" FontWeight="SemiBold" Margin="0,16,0,2"/><ComboBox x:Name="TranslationProviderBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Browser.TranslationProvider}"/>
-                <TextBlock Text="{DynamicResource TranslationTargetPreset}" Margin="0,10,0,2"/>
-                <ComboBox x:Name="TranslationTargetBox" DisplayMemberPath="DisplayName" SelectedValuePath="Code" SelectionChanged="TranslationTargetBox_SelectionChanged"/>
-                <TextBox x:Name="CustomTranslationTargetBox" Margin="0,7,0,0" Visibility="Collapsed" ToolTip="{DynamicResource CustomLanguageCodeHint}"/>
-                <CheckBox Content="{DynamicResource AutoTranslate}" IsChecked="{Binding Browser.AutoTranslateForeignPages}" Margin="0,9,0,0"/>
-                <TextBlock Text="{DynamicResource ExternalPlayer}" FontWeight="SemiBold" Margin="0,16,0,2"/><TextBox Text="{Binding Advanced.ExternalPlayerPath}"/>
-            </StackPanel></ScrollViewer></TabItem>
-            <TabItem Header="{DynamicResource Downloads}"><StackPanel Margin="20" MaxWidth="610">
-                <TextBlock Text="{DynamicResource DownloadHandler}" FontWeight="SemiBold"/><ComboBox x:Name="DownloadModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Downloads.Mode}"/>
-                <Border Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,6,0,2"><TextBlock Text="{DynamicResource ExternalDownloadCookieHint}" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}"/></Border>
-                <TextBlock Text="{DynamicResource DownloadFolder}" Margin="0,12,0,2"/><TextBox Text="{Binding Downloads.Folder}"/>
-                <TextBlock Text="{DynamicResource ExternalDownloader}" Margin="0,12,0,2"/><TextBox Text="{Binding Downloads.ExternalCommand}"/>
-                <TextBlock Text="{DynamicResource ExternalArguments}" Margin="0,12,0,2"/><TextBox Text="{Binding Downloads.ExternalArguments}"/>
-            </StackPanel></TabItem>
-            <TabItem Header="{DynamicResource Backup}"><StackPanel Margin="20" MaxWidth="610">
-                <TextBlock Text="{DynamicResource PortableData}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/><TextBlock Text="{DynamicResource BackupHint}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"/>
-                <TextBlock Text="{DynamicResource DataStorageMode}" FontWeight="SemiBold" Margin="0,16,0,2"/><ComboBox x:Name="StorageModeBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Storage.Mode}"/>
-                <TextBlock Text="{DynamicResource CustomDataPath}" Margin="0,10,0,2"/><DockPanel><Button DockPanel.Dock="Right" Content="{DynamicResource Browse}" Click="BrowseDataPath_Click" Margin="8,0,0,0"/><TextBox Text="{Binding Storage.CustomPath, UpdateSourceTrigger=PropertyChanged}"/></DockPanel>
-                <TextBlock x:Name="CurrentDataPathText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
-                <WrapPanel Margin="0,18,0,0"><Button Content="{DynamicResource ExportSettings}" Click="ExportSettings_Click" Margin="0,0,8,0"/><Button Content="{DynamicResource ImportSettings}" Click="ImportSettings_Click"/></WrapPanel>
-                <WrapPanel Margin="0,10,0,0"><Button Content="{DynamicResource ExportRules}" Click="ExportRules_Click" Margin="0,0,8,0"/><Button Content="{DynamicResource ImportRules}" Click="ImportRules_Click"/></WrapPanel>
-            </StackPanel></TabItem>
-            <TabItem Header="{DynamicResource About}"><ScrollViewer><StackPanel Margin="20" MaxWidth="610">
-                <TextBlock Text="ZZZ" FontSize="26" FontWeight="SemiBold"/>
-                <Grid Margin="0,16,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                    <TextBlock Text="{DynamicResource ApplicationVersion}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutAppVersion" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
-                    <TextBlock Grid.Row="1" Text="{DynamicResource WebViewRuntimeVersion}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutWebViewVersion" Grid.Row="1" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
-                    <TextBlock Grid.Row="2" Text="{DynamicResource LocalBrowserFingerprint}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutFingerprint" Grid.Row="2" Grid.Column="1" Margin="0,5" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/>
-                    <TextBlock Grid.Row="3" Text="{DynamicResource OperatingSystem}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutOperatingSystem" Grid.Row="3" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
-                    <TextBlock Grid.Row="4" Text="{DynamicResource Architecture}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutArchitecture" Grid.Row="4" Grid.Column="1" Margin="0,5"/>
-                    <TextBlock Grid.Row="5" Text="{DynamicResource Framework}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutFramework" Grid.Row="5" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
-                    <TextBlock Grid.Row="6" Text="{DynamicResource ProcessorCount}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutProcessorCount" Grid.Row="6" Grid.Column="1" Margin="0,5"/>
-                    <TextBlock Grid.Row="7" Text="{DynamicResource Language}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutLanguage" Grid.Row="7" Grid.Column="1" Margin="0,5"/>
-                    <TextBlock Grid.Row="8" Text="{DynamicResource StorageLocation}" FontWeight="SemiBold" Margin="0,5"/><TextBlock x:Name="AboutStorage" Grid.Row="8" Grid.Column="1" Margin="0,5" TextWrapping="Wrap"/>
-                </Grid>
-                <Border Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,12,0,0"><TextBlock Text="{DynamicResource FingerprintPrivacyHint}" TextWrapping="Wrap"/></Border>
-                <TextBlock Text="{DynamicResource UserAgentMode}" FontWeight="SemiBold" Margin="0,16,0,2"/><TextBlock x:Name="AboutUserAgent" TextWrapping="Wrap"/>
+                <TextBlock Text="{DynamicResource FingerprintPrivacyHint}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"/><TextBlock Text="{DynamicResource UserAgentMode}" Style="{StaticResource FieldLabel}"/><TextBlock x:Name="AboutUserAgent" TextWrapping="Wrap"/>
                 <WrapPanel Margin="0,18,0,0"><Button Content="{DynamicResource ProjectAddress}" Click="ProjectUrl_Click" Style="{StaticResource PrimaryButton}"/><Button Content="{DynamicResource UpdateAddress}" Click="UpdatesUrl_Click" Margin="8,0,0,0"/></WrapPanel>
             </StackPanel></ScrollViewer></TabItem>
         </TabControl>

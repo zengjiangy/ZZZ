@@ -12,7 +12,7 @@
                 </Border>
                 <ControlTemplate.Triggers>
                     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource HoverBrush}"/></Trigger>
-                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource LineBrush}"/><Setter TargetName="Indicator" Property="Background" Value="{DynamicResource AccentBrush}"/><Setter Property="Panel.ZIndex" Value="2"/></Trigger>
+                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource LineBrush}"/><Setter TargetName="Indicator" Property="Background" Value="{DynamicResource AccentUiBrush}"/><Setter Property="Panel.ZIndex" Value="2"/></Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
@@ -25,17 +25,17 @@
                 </Border>
                 <ControlTemplate.Triggers>
                     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource HoverBrush}"/></Trigger>
-                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource LineBrush}"/><Setter TargetName="Indicator" Property="Background" Value="{DynamicResource AccentBrush}"/></Trigger>
+                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource LineBrush}"/><Setter TargetName="Indicator" Property="Background" Value="{DynamicResource AccentUiBrush}"/></Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
         <DataTemplate x:Key="HorizontalTabTemplate">
             <Grid Margin="7,0,2,0" ContextMenuOpening="TabContextMenu_Opening"><Grid.ColumnDefinitions><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/><ColumnDefinition Width="28"/></Grid.ColumnDefinitions>
-                <Grid x:Name="FaviconHost" Width="18" Height="18" VerticalAlignment="Center">
+                <Grid x:Name="FaviconHost" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True">
                     <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="5"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Favicon}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><TextBlock Text="{Binding FaviconFallback}" Foreground="{DynamicResource AccentTextBrush}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                    <Image Source="{Binding Favicon}" Width="18" Height="18" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True"/>
+                    <Image Source="{Binding Favicon}" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True"/>
                 </Grid>
-                <Path x:Name="PrivateTabIcon" Grid.Column="0" Visibility="Collapsed" Fill="{DynamicResource AccentBrush}" Margin="2" Data="M6,0.8 L11,2.7 L10.5,7.5 C10.2,9.7 8.4,11.5 6,12.4 C3.6,11.5 1.8,9.7 1.5,7.5 L1,2.7 Z M4.3,6 L7.7,6 L7.7,9 L4.3,9 Z M5,6 L5,4.9 C5,3.6 7,3.6 7,4.9 L7,6 Z" Stretch="Uniform"/>
+                <Path x:Name="PrivateTabIcon" Grid.Column="0" Visibility="Collapsed" Fill="{DynamicResource AccentUiBrush}" Margin="2" Data="M6,0.8 L11,2.7 L10.5,7.5 C10.2,9.7 8.4,11.5 6,12.4 C3.6,11.5 1.8,9.7 1.5,7.5 L1,2.7 Z M4.3,6 L7.7,6 L7.7,9 L4.3,9 Z M5,6 L5,4.9 C5,3.6 7,3.6 7,4.9 L7,6 Z" Stretch="Uniform"/>
                 <Button Grid.Column="1" Padding="6,0" HorizontalContentAlignment="Left" Command="{Binding DataContext.SelectTabCommand, Source={x:Reference RootWindow}}" CommandParameter="{Binding}" ToolTip="{Binding Url}"><TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/></Button>
                 <Button Grid.Column="2" Content="×" FontSize="16" Padding="0" Width="25" Height="25" Command="{Binding DataContext.CloseTabCommand, Source={x:Reference RootWindow}}" CommandParameter="{Binding}" ToolTip="{DynamicResource CloseTab}"/>
                 <Grid.ContextMenu><ContextMenu>
@@ -49,11 +49,11 @@
         </DataTemplate>
         <DataTemplate x:Key="VerticalTabTemplate">
             <Grid Margin="10,0,3,0" ContextMenuOpening="TabContextMenu_Opening"><Grid.ColumnDefinitions><ColumnDefinition Width="22"/><ColumnDefinition Width="*"/><ColumnDefinition Width="29"/></Grid.ColumnDefinitions>
-                <Grid x:Name="VerticalFaviconHost" Width="20" Height="20" VerticalAlignment="Center">
+                <Grid x:Name="VerticalFaviconHost" Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True">
                     <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="6"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Favicon}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><TextBlock Text="{Binding FaviconFallback}" Foreground="{DynamicResource AccentTextBrush}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                    <Image Source="{Binding Favicon}" Width="20" Height="20" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True"/>
+                    <Image Source="{Binding Favicon}" Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True"/>
                 </Grid>
-                <Path x:Name="VerticalPrivateTabIcon" Grid.Column="0" Visibility="Collapsed" Fill="{DynamicResource AccentBrush}" Margin="2" Data="M6,0.8 L11,2.7 L10.5,7.5 C10.2,9.7 8.4,11.5 6,12.4 C3.6,11.5 1.8,9.7 1.5,7.5 L1,2.7 Z M4.3,6 L7.7,6 L7.7,9 L4.3,9 Z M5,6 L5,4.9 C5,3.6 7,3.6 7,4.9 L7,6 Z" Stretch="Uniform"/>
+                <Path x:Name="VerticalPrivateTabIcon" Grid.Column="0" Visibility="Collapsed" Fill="{DynamicResource AccentUiBrush}" Margin="2" Data="M6,0.8 L11,2.7 L10.5,7.5 C10.2,9.7 8.4,11.5 6,12.4 C3.6,11.5 1.8,9.7 1.5,7.5 L1,2.7 Z M4.3,6 L7.7,6 L7.7,9 L4.3,9 Z M5,6 L5,4.9 C5,3.6 7,3.6 7,4.9 L7,6 Z" Stretch="Uniform"/>
                 <Button x:Name="VerticalTitleButton" Grid.Column="1" Padding="7,0" HorizontalContentAlignment="Left" Command="{Binding DataContext.SelectTabCommand, Source={x:Reference RootWindow}}" CommandParameter="{Binding}" ToolTip="{Binding Url}"><TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/></Button>
                 <Button x:Name="VerticalCloseButton" Grid.Column="2" Content="×" FontSize="16" Padding="0" Width="25" Height="25" Command="{Binding DataContext.CloseTabCommand, Source={x:Reference RootWindow}}" CommandParameter="{Binding}" ToolTip="{DynamicResource CloseTab}"/>
                 <Grid.ContextMenu><ContextMenu>
@@ -80,7 +80,7 @@
                 <Button Grid.Row="1" Margin="7,4" HorizontalContentAlignment="Left" Command="{Binding CreateTabCommand}" ToolTip="{DynamicResource NewTab}" Padding="11,6"><StackPanel Orientation="Horizontal"><Path Width="17" Height="17" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.8" Data="M9,2 L9,16 M2,9 L16,9" Stretch="Uniform"/><TextBlock Text="{DynamicResource NewTab}" Visibility="{Binding AreVerticalTabsExpanded, Converter={StaticResource BoolVisibility}}" Margin="10,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
                 <ListBox x:Name="VerticalTabsList" Grid.Row="2" ItemsSource="{Binding WorkspaceTabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ItemContainerStyle="{StaticResource VerticalTabItemContainer}" ItemTemplate="{StaticResource VerticalTabTemplate}" SelectionChanged="TabsList_SelectionChanged"
                          AllowDrop="True" PreviewMouseDown="TabsList_PreviewMouseDown" PreviewMouseLeftButtonDown="TabsList_PreviewMouseLeftButtonDown" PreviewMouseMove="TabsList_PreviewMouseMove" DragOver="TabsList_DragOver" Drop="TabsList_Drop" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"/>
-                <Button Grid.Row="3" Margin="7,4" HorizontalContentAlignment="Left" Click="WorkspaceButton_Click" ToolTip="{DynamicResource Workspaces}" Padding="11,6"><StackPanel Orientation="Horizontal"><Grid Width="17" Height="17" VerticalAlignment="Center"><Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><Border Margin="1" Background="{DynamicResource AccentBrush}" CornerRadius="1.5"/><Border Grid.Column="1" Margin="1" Background="{DynamicResource AccentBrush}" CornerRadius="1.5"/><Border Grid.Row="1" Margin="1" Background="{DynamicResource AccentBrush}" CornerRadius="1.5"/><Border Grid.Row="1" Grid.Column="1" Margin="1" Background="{DynamicResource AccentBrush}" CornerRadius="1.5"/></Grid><TextBlock Text="{DynamicResource ManageWorkspaces}" Visibility="{Binding AreVerticalTabsExpanded, Converter={StaticResource BoolVisibility}}" Margin="10,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
+                <Button Grid.Row="3" Margin="7,4" HorizontalContentAlignment="Left" Click="WorkspaceButton_Click" ToolTip="{DynamicResource Workspaces}" Padding="11,6"><StackPanel Orientation="Horizontal"><Grid Width="17" Height="17" VerticalAlignment="Center"><Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><Border Margin="1" Background="{DynamicResource AccentUiBrush}" CornerRadius="1.5"/><Border Grid.Column="1" Margin="1" Background="{DynamicResource AccentUiBrush}" CornerRadius="1.5"/><Border Grid.Row="1" Margin="1" Background="{DynamicResource AccentUiBrush}" CornerRadius="1.5"/><Border Grid.Row="1" Grid.Column="1" Margin="1" Background="{DynamicResource AccentUiBrush}" CornerRadius="1.5"/></Grid><TextBlock Text="{DynamicResource ManageWorkspaces}" Visibility="{Binding AreVerticalTabsExpanded, Converter={StaticResource BoolVisibility}}" Margin="10,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
             </Grid>
         </Border>
 
@@ -135,20 +135,20 @@
                 <Button Grid.Column="6" Style="{StaticResource IconButton}" ToolTip="{DynamicResource TranslatePage}" Command="{Binding SelectedTab.TranslateCommand}"><TextBlock Text="译" FontSize="15" FontWeight="SemiBold"/></Button>
                 <Button x:Name="BookmarkButton" Grid.Column="7" Style="{StaticResource IconButton}" ToolTip="{DynamicResource BookmarkPage}" Command="{Binding AddBookmarkCommand}">
                     <Path StrokeThickness="1.6" StrokeLineJoin="Round" Data="M9,2 L11.2,6.5 L16,7.2 L12.5,10.6 L13.3,15.5 L9,13.2 L4.7,15.5 L5.5,10.6 L2,7.2 L6.8,6.5 Z" Stretch="Uniform">
-                        <Path.Style><Style TargetType="Path"><Setter Property="Stroke" Value="{DynamicResource TextBrush}"/><Setter Property="Fill" Value="Transparent"/><Style.Triggers><DataTrigger Binding="{Binding IsCurrentPageBookmarked}" Value="True"><Setter Property="Stroke" Value="{DynamicResource AccentTextBrush}"/><Setter Property="Fill" Value="{DynamicResource AccentBrush}"/></DataTrigger></Style.Triggers></Style></Path.Style>
+                        <Path.Style><Style TargetType="Path"><Setter Property="Stroke" Value="{DynamicResource TextBrush}"/><Setter Property="Fill" Value="Transparent"/><Style.Triggers><DataTrigger Binding="{Binding IsCurrentPageBookmarked}" Value="True"><Setter Property="Stroke" Value="{DynamicResource AccentTextBrush}"/><Setter Property="Fill" Value="{DynamicResource AccentUiBrush}"/></DataTrigger></Style.Triggers></Style></Path.Style>
                     </Path>
                 </Button>
-                <Button x:Name="MediaButton" Grid.Column="8" Style="{StaticResource IconButton}" ToolTip="{DynamicResource DetectedMedia}" Click="MediaButton_Click"><Path Fill="{DynamicResource AccentBrush}" Data="M6,2 L15,2 L15,12 C15,14 13.5,16 11,16 C9,16 8,15 8,13.5 C8,12 9.5,11 11.5,11 C12.2,11 12.8,11.1 13.2,11.4 L13.2,5 L7.8,5 L7.8,13 C7.8,15 6,17 3.8,17 C1.8,17 .8,15.8 .8,14.4 C.8,12.8 2.3,11.8 4.2,11.8 C4.9,11.8 5.5,12 6,12.3 Z" Stretch="Uniform"/></Button>
+                <Button x:Name="MediaButton" Grid.Column="8" Style="{StaticResource IconButton}" ToolTip="{DynamicResource DetectedMedia}" Click="MediaButton_Click"><Path Fill="{DynamicResource AccentUiBrush}" Data="M6,2 L15,2 L15,12 C15,14 13.5,16 11,16 C9,16 8,15 8,13.5 C8,12 9.5,11 11.5,11 C12.2,11 12.8,11.1 13.2,11.4 L13.2,5 L7.8,5 L7.8,13 C7.8,15 6,17 3.8,17 C1.8,17 .8,15.8 .8,14.4 C.8,12.8 2.3,11.8 4.2,11.8 C4.9,11.8 5.5,12 6,12.3 Z" Stretch="Uniform"/></Button>
                 <Button x:Name="MenuButton" Grid.Column="9" Style="{StaticResource IconButton}" ToolTip="{DynamicResource Menu}" Click="MenuButton_Click"><Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Data="M3,8 A2,2 0 1 0 3,12 A2,2 0 1 0 3,8 M10,8 A2,2 0 1 0 10,12 A2,2 0 1 0 10,8 M17,8 A2,2 0 1 0 17,12 A2,2 0 1 0 17,8" Stretch="Uniform"/></Button>
             </Grid>
         </Border>
 
-        <ProgressBar Grid.Row="2" Height="2" IsIndeterminate="True" Foreground="{DynamicResource AccentBrush}" Background="Transparent" Visibility="{Binding SelectedTab.IsLoading, Converter={StaticResource BoolVisibility}}"/>
+        <ProgressBar Grid.Row="2" Height="2" IsIndeterminate="True" Foreground="{DynamicResource AccentUiBrush}" Background="Transparent" Visibility="{Binding SelectedTab.IsLoading, Converter={StaticResource BoolVisibility}}"/>
         <Border Grid.Row="3" Background="{DynamicResource WebBackdropBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
             <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <!-- WebView2 is an HWND surface, so tool strips live in their own layout row instead of overlaying the page. -->
                 <WrapPanel x:Name="PageTools" Background="{DynamicResource SurfaceAltBrush}" HorizontalAlignment="Right">
-                    <Border Margin="8,5" Padding="10,5" CornerRadius="9" Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" Visibility="{Binding ShowSessionRestorePrompt, Converter={StaticResource BoolVisibility}}">
+                    <Border Margin="8,5" Padding="10,5" CornerRadius="9" Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource AccentUiBrush}" BorderThickness="1" Visibility="{Binding ShowSessionRestorePrompt, Converter={StaticResource BoolVisibility}}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="{DynamicResource RestoreSessionPrompt}" VerticalAlignment="Center" Margin="2,0,10,0"/>
                             <Button Content="{DynamicResource Restore}" Command="{Binding RestorePreviousSessionCommand}" Style="{StaticResource PrimaryButton}" Padding="12,5"/>
@@ -177,7 +177,12 @@
                 </Grid>
             </Grid>
         </Border>
-        <Border x:Name="StatusBar" Grid.Row="4" Background="{DynamicResource SurfaceAltBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0"><TextBlock Text="{Binding SelectedTab.Status}" Foreground="{DynamicResource MutedBrush}" Margin="14,5" FontSize="11" TextTrimming="CharacterEllipsis"/></Border>
+        <Border x:Name="StatusBar" Grid.Row="4" Background="{DynamicResource SurfaceAltBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
+            <DockPanel LastChildFill="True">
+                <Button x:Name="StatusMenuButton" DockPanel.Dock="Right" Width="38" Height="28" Margin="4,1" Padding="0" Click="MenuButton_Click" ToolTip="{DynamicResource Menu}" FontSize="14" FontWeight="SemiBold" Content="•••"/>
+                <TextBlock Text="{Binding SelectedTab.Status}" Foreground="{DynamicResource MutedBrush}" Margin="14,6,8,5" FontSize="11" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+        </Border>
         </Grid>
 
         <Popup x:Name="WorkspacePopup" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="5">

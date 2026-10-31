@@ -29,6 +29,8 @@ public sealed class AppSettings
     public StartPageSettings StartPage { get; set; } = new();
     public StorageSettings Storage { get; set; } = new();
     public LegalSettings Legal { get; set; } = new();
+    public List<MenuActionSetting> Menu { get; set; } = BrowserActionCatalog.DefaultMenuSettings();
+    public List<ShortcutSetting> Shortcuts { get; set; } = BrowserActionCatalog.DefaultShortcutSettings();
 }
 
 public sealed class UiSettings

@@ -292,6 +292,7 @@ public sealed class SettingsService : ISettingsService
     public async Task LoadAsync()
     {
         Current = await JsonFiles.LoadAsync(AppPaths.Settings, () => new AppSettings());
+        BrowserActionCatalog.Normalize(Current);
         Current.Legal ??= new LegalSettings();
         Current.Storage.Mode = AppPaths.StorageMode;
         Current.Storage.CustomPath = AppPaths.CustomStoragePath;
@@ -309,10 +310,15 @@ public sealed class SettingsService : ISettingsService
     }
     public Task SaveAsync() => JsonFiles.SaveAsync(AppPaths.Settings, Current);
     public Task ExportAsync(string path) => JsonFiles.SaveAsync(path, Current);
-    public void Replace(AppSettings settings) => Current = settings;
+    public void Replace(AppSettings settings)
+    {
+        BrowserActionCatalog.Normalize(settings);
+        Current = settings;
+    }
     public async Task ImportAsync(string path)
     {
         Current = await JsonFiles.LoadAsync(path, () => Current);
+        BrowserActionCatalog.Normalize(Current);
         await SaveAsync();
     }
 }
@@ -1033,34 +1039,35 @@ public static class ThemeService
         IsDarkTheme = mode == AppearanceMode.Dark || (mode == AppearanceMode.System && IsSystemDark());
         IsGrayscaleMode = grayscale;
         var dark = IsDarkTheme;
-        Set("WindowBrush", dark ? "#FF17151D" : "#FFF6F5FA");
-        Set("ChromeBrush", dark ? "#FF1E1B27" : "#FFF0EFF6");
-        Set("SurfaceBrush", dark ? "#FF27232F" : "#FFFFFFFF");
-        Set("SurfaceAltBrush", dark ? "#FF211E29" : "#FFFAF9FC");
-        Set("ToolbarBrush", dark ? "#F526222F" : "#F7FFFFFF");
-        Set("AddressBrush", dark ? "#FF302B39" : "#FFF4F3F8");
-        Set("TextBrush", dark ? "#FFF4F1FA" : "#FF1D1A24");
-        Set("MutedBrush", dark ? "#FFB9B2C4" : "#FF6E6978");
-        Set("LineBrush", dark ? "#FF403A49" : "#FFE1DFE8");
-        var defaultAccent = ParseColor(dark ? "#FFA99BFF" : "#FF6B5ADA", System.Windows.Media.Color.FromRgb(107, 90, 218));
+        Set("WindowBrush", dark ? "#FF15171B" : "#FFF7F8FA");
+        Set("ChromeBrush", dark ? "#FF1B1E24" : "#FFF1F3F6");
+        Set("SurfaceBrush", dark ? "#FF22252C" : "#FFFFFFFF");
+        Set("SurfaceAltBrush", dark ? "#FF1D2026" : "#FFF8F9FB");
+        Set("ToolbarBrush", dark ? "#F522252C" : "#F7FFFFFF");
+        Set("AddressBrush", dark ? "#FF2A2E36" : "#FFF3F4F7");
+        Set("TextBrush", dark ? "#FFF0F2F5" : "#FF20242B");
+        Set("MutedBrush", dark ? "#FFAAB1BD" : "#FF68707D");
+        Set("LineBrush", dark ? "#FF393E48" : "#FFDDE1E7");
+        var defaultAccent = ParseColor(dark ? "#FFA69DFF" : "#FF6259D9", System.Windows.Media.Color.FromRgb(98, 89, 217));
         var accent = startPage?.SyncApplicationAccent == true
             ? ParseColor(startPage.BackgroundColor, defaultAccent)
             : defaultAccent;
         accent.A = 255;
-        var softTarget = dark ? System.Windows.Media.Color.FromRgb(39, 35, 47) : System.Windows.Media.Colors.White;
+        var surface = dark ? System.Windows.Media.Color.FromRgb(34, 37, 44) : System.Windows.Media.Colors.White;
         accent = GrayscaleIfNeeded(accent);
         defaultAccent = GrayscaleIfNeeded(defaultAccent);
         Set("AccentBrush", accent);
-        var accentSoft = Blend(accent, GrayscaleIfNeeded(softTarget), dark ? 0.68 : 0.82);
+        var accentSoft = Blend(accent, GrayscaleIfNeeded(surface), dark ? 0.68 : 0.82);
         Set("AccentSoftBrush", accentSoft);
         var blackContrast = ContrastRatio(System.Windows.Media.Colors.Black, accent);
         var whiteContrast = ContrastRatio(System.Windows.Media.Colors.White, accent);
         Set("AccentForegroundBrush", blackContrast >= whiteContrast ? System.Windows.Media.Colors.Black : System.Windows.Media.Colors.White);
         Set("AccentTextBrush", AccessibleAccentText(accent, accentSoft, dark));
+        Set("AccentUiBrush", AccessibleAccentText(accent, surface, dark));
         Set("AppIconBrush", defaultAccent);
-        Set("HoverBrush", dark ? "#16FFFFFF" : "#0D241C35");
-        Set("PressedBrush", dark ? "#26FFFFFF" : "#18241C35");
-        Set("WebBackdropBrush", dark ? "#FF111016" : "#FFFFFFFF");
+        Set("HoverBrush", dark ? "#16FFFFFF" : "#0D20242B");
+        Set("PressedBrush", dark ? "#26FFFFFF" : "#1820242B");
+        Set("WebBackdropBrush", dark ? "#FF101216" : "#FFFFFFFF");
         foreach (Window window in Application.Current.Windows) ApplyWindowChrome(window);
     }
 

@@ -11,8 +11,8 @@ namespace ZZZ.Configuration;
 /// </summary>
 public static class AppVersion
 {
-    public const string Current = "2.2.2";
+    public const string Current = "2.3.0";
 
-    /// <summary>Product token appended to outgoing user-agent strings, e.g. "ZZZ/2.2.2".</summary>
+    /// <summary>Product token appended to outgoing user-agent strings, e.g. "ZZZ/2.3.0".</summary>
     public const string UserAgentProduct = "ZZZ/" + Current;
 }

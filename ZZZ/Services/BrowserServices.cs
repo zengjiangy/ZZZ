@@ -144,7 +144,7 @@ public sealed class DownloadService(ISettingsService settings) : IDownloadServic
 public interface IBrowserLifecycleService : IDisposable
 {
     event Action<string, bool>? NewTabRequested;
-    event EventHandler<BrowserShortcutEventArgs>? ShortcutRequested;
+    event EventHandler<BrowserKeyEventArgs>? KeyRequested;
     Task InitializeAsync(WebView2 view, BrowserTabViewModel tab, CancellationToken cancellationToken = default);
     Task ApplyCurrentSettingsAsync(bool reloadPages);
     void SetActive(BrowserTabViewModel? activeTab);
@@ -152,14 +152,11 @@ public interface IBrowserLifecycleService : IDisposable
     void Close(BrowserTabViewModel tab);
 }
 
-public enum BrowserShortcut { Find, CloseSplit, TaskManager, NextTab, PreviousTab, SelectTabNumber, ToggleBookmark, ReopenClosedTab, Library, Downloads }
-
-public sealed class BrowserShortcutEventArgs(BrowserTabViewModel tab, BrowserShortcut shortcut, int tabNumber = 0) : EventArgs
+public sealed class BrowserKeyEventArgs(BrowserTabViewModel tab, Key key, ModifierKeys modifiers) : EventArgs
 {
     public BrowserTabViewModel Tab { get; } = tab;
-    public BrowserShortcut Shortcut { get; } = shortcut;
-    /// <summary>1-based tab number for <see cref="BrowserShortcut.SelectTabNumber"/> (9 = last tab).</summary>
-    public int TabNumber { get; } = tabNumber;
+    public Key Key { get; } = key;
+    public ModifierKeys Modifiers { get; } = modifiers;
     public bool Handled { get; set; }
 }
 
@@ -195,7 +192,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private int _pendingInitializations;
     private TaskCompletionSource<bool>? _initializationsDrained;
     public event Action<string, bool>? NewTabRequested;
-    public event EventHandler<BrowserShortcutEventArgs>? ShortcutRequested;
+    public event EventHandler<BrowserKeyEventArgs>? KeyRequested;
 
 
     public BrowserLifecycleService(ISettingsService settings, AdBlockManager adBlock, IUserScriptService scripts, IHistoryService history, IDownloadService downloads, IPrivacyService privacy, ITranslationService translation, FaviconCacheService favicons)
@@ -300,38 +297,14 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
 
     private void OnWebViewPreviewKeyDown(BrowserTabViewModel tab, KeyEventArgs e)
     {
-        var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
-        var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
-        // Chromium consumes some accelerators before they can bubble to the
-        // window, so every tab- and browser-level shortcut that must keep
-        // working while the page has focus is intercepted here and routed to
-        // the main window through ShortcutRequested.
+        // Chromium consumes accelerators before they bubble to WPF. Forward the
+        // same raw key data to the main window so both input paths share the
+        // user's single shortcut table instead of maintaining divergent maps.
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        var tabNumber = TabNumberFromKey(key);
-        BrowserShortcut? shortcut = ctrl && key == Key.F ? BrowserShortcut.Find
-            : ctrl && shift && key == Key.W ? BrowserShortcut.CloseSplit
-            : shift && key == Key.Escape ? BrowserShortcut.TaskManager
-            : ctrl && shift && key == Key.T ? BrowserShortcut.ReopenClosedTab
-            : ctrl && key == Key.Tab ? (shift ? BrowserShortcut.PreviousTab : BrowserShortcut.NextTab)
-            : ctrl && key == Key.PageDown ? BrowserShortcut.NextTab
-            : ctrl && key == Key.PageUp ? BrowserShortcut.PreviousTab
-            : ctrl && !shift && tabNumber > 0 ? BrowserShortcut.SelectTabNumber
-            : ctrl && !shift && key == Key.D ? BrowserShortcut.ToggleBookmark
-            : ctrl && !shift && key == Key.H ? BrowserShortcut.Library
-            : ctrl && !shift && key == Key.J ? BrowserShortcut.Downloads
-            : null;
-        if (shortcut is null) return;
-        var request = new BrowserShortcutEventArgs(tab, shortcut.Value, tabNumber);
-        ShortcutRequested?.Invoke(this, request);
+        var request = new BrowserKeyEventArgs(tab, key, Keyboard.Modifiers);
+        KeyRequested?.Invoke(this, request);
         if (request.Handled) e.Handled = true;
     }
-
-    private static int TabNumberFromKey(Key key) => key switch
-    {
-        >= Key.D1 and <= Key.D9 => key - Key.D1 + 1,
-        >= Key.NumPad1 and <= Key.NumPad9 => key - Key.NumPad1 + 1,
-        _ => 0
-    };
 
     private async Task ConfigureAsync(CoreWebView2 core, BrowserTabViewModel tab, CancellationToken cancellationToken)
     {
@@ -458,7 +431,6 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         {
             try { e.Request.Headers.RemoveHeader("Cookie"); } catch { }
         }
-        if (cfg.Advanced.EnableResourceSniffer && TryMedia(url, null, null, out var kind)) tab.AddMedia(url, kind);
     }
 
     private static AdBlockResourceType ToAdBlockResourceType(CoreWebView2WebResourceContext context, string requestUrl, string documentUrl)
@@ -506,6 +478,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
         if (!e.IsSuccess) { tab.Status = $"Navigation error: {e.WebErrorStatus}"; return; }
         if (_isShuttingDown) return;
         tab.Status = string.Empty;
+        tab.RetryPendingReaderMode(core);
         if (!tab.IsPrivate)
             try { await _history.AddAsync(tab.Title, tab.Url); }
             catch { /* History IO must never tear down the UI dispatcher. */ }
@@ -636,8 +609,16 @@ block('RTCPeerConnection'); block('webkitRTCPeerConnection');
     {
         var clean = url.Split('?', '#')[0];
         try { clean = Uri.UnescapeDataString(clean); } catch { }
+        // DASH/HLS segments are implementation details of the active player,
+        // not standalone downloads. Keep manifests and extensionless streams,
+        // but never list ordinary segment URLs even when their MIME is media.
+        if (System.Text.RegularExpressions.Regex.IsMatch(clean, @"\.(?:m4s|ts|m2ts)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            kind = string.Empty;
+            return false;
+        }
         if (!string.IsNullOrWhiteSpace(contentDisposition)) clean += " " + contentDisposition;
-        foreach (var ext in new[] { "m3u8", "mpd", "mp4", "m4v", "mov", "mkv", "webm", "mp3", "m4a", "flac", "aac", "ogg", "oga", "opus", "wav", "flv", "avi", "ts", "m2ts", "m4s" })
+        foreach (var ext in new[] { "m3u8", "mpd", "mp4", "m4v", "mov", "mkv", "webm", "mp3", "m4a", "flac", "aac", "ogg", "oga", "opus", "wav", "flv", "avi" })
             if (System.Text.RegularExpressions.Regex.IsMatch(clean, @"\." + ext + @"(?:$|[\s\""';])", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) { kind = ext; return true; }
         var mime = (contentType ?? string.Empty).Split(';')[0].Trim().ToLowerInvariant();
         if (mime.StartsWith("video/") || mime.StartsWith("audio/")) { kind = mime.Substring(mime.IndexOf('/') + 1); return true; }

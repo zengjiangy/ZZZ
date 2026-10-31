@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Diagnostics;
+using System.Collections.ObjectModel;
+using System.Windows.Input;
 
 namespace ZZZ.Views;
 
@@ -15,6 +17,8 @@ public partial class SettingsWindow : Window
     private readonly MainViewModel _main;
     private AppSettings _working = new();
     private string _pendingBackgroundSource = string.Empty;
+    private readonly ObservableCollection<MenuActionEditor> _menuActions = [];
+    private readonly ObservableCollection<ShortcutActionEditor> _shortcutActions = [];
     public SettingsWindow(MainViewModel main, bool showAdvanced = false)
     {
         InitializeComponent();
@@ -36,6 +40,7 @@ public partial class SettingsWindow : Window
         DownloadModeBox.ItemsSource = new[] { Choice(DownloadMode.BuiltIn, "BuiltIn"), Choice(DownloadMode.External, "External") };
         StorageModeBox.ItemsSource = new[] { Choice(DataStorageMode.LocalAppData, "LocalData"), Choice(DataStorageMode.Portable, "PortableMode"), Choice(DataStorageMode.Custom, "CustomData") };
         SearchEngineBox.ItemsSource = _working.SearchEngines;
+        LoadActionEditors();
         CurrentDataPathText.Text = $"{LocalizationService.Text("CurrentDataPath")}: {AppPaths.Root}";
         LoadAboutInfo();
         RefreshBackgroundColorPreview();
@@ -46,6 +51,12 @@ public partial class SettingsWindow : Window
         try
         {
             SearchGrid.CommitEdit();
+            SaveActionEditors();
+            if (!ShortcutRouter.IsValidConfiguration(_working.Shortcuts))
+                throw new InvalidOperationException(LocalizationService.Text("ShortcutInvalid"));
+            var conflict = ShortcutRouter.FindDuplicateGesture(_working.Shortcuts);
+            if (conflict is not null)
+                throw new InvalidOperationException(string.Format(LocalizationService.Text("ShortcutConflict"), conflict));
             if (_working.Storage.Mode == DataStorageMode.Custom && string.IsNullOrWhiteSpace(_working.Storage.CustomPath))
                 throw new InvalidOperationException(LocalizationService.Text("CustomPathRequired"));
             _working.Browser.TranslationTargetLanguage = ReadTranslationTarget();
@@ -72,10 +83,95 @@ public partial class SettingsWindow : Window
     }
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
     private async void ExportSettings_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "JSON|*.json", FileName = "zzz-settings.json" }; if (d.ShowDialog() == true) await _main.Services.Settings.ExportAsync(d.FileName); }
-    private async void ImportSettings_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "JSON|*.json" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportSettings")) { await _main.Services.Settings.ImportAsync(d.FileName); _working = Clone(_main.Services.Settings.Current); DataContext = _working; SearchEngineBox.ItemsSource = _working.SearchEngines; LoadTranslationTarget(_working.Browser.TranslationTargetLanguage); } }
+    private async void ImportSettings_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "JSON|*.json" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportSettings")) { await _main.Services.Settings.ImportAsync(d.FileName); _working = Clone(_main.Services.Settings.Current); DataContext = _working; SearchEngineBox.ItemsSource = _working.SearchEngines; LoadTranslationTarget(_working.Browser.TranslationTargetLanguage); LoadActionEditors(); } }
     private async void ExportRules_Click(object sender, RoutedEventArgs e) { var d = new SaveFileDialog { Filter = "Text|*.txt", FileName = "zzz-blocking-rules.txt" }; if (d.ShowDialog() == true) { await _main.Services.EnsureBackgroundInitializedAsync(); await _main.Services.AdBlock.ExportAsync(d.FileName); } }
     private async void ImportRules_Click(object sender, RoutedEventArgs e) { var d = new OpenFileDialog { Filter = "Text|*.txt|All files|*.*" }; if (d.ShowDialog() == true && ConfirmSensitive("ImportRules")) { await _main.Services.EnsureBackgroundInitializedAsync(); await _main.Services.AdBlock.ImportAsync(d.FileName); } }
     private async void ManageAdBlock_Click(object sender, RoutedEventArgs e) { await _main.Services.EnsureBackgroundInitializedAsync(); new AdBlockSettingsWindow(_main) { Owner = this }.ShowDialog(); }
+
+    private void LoadActionEditors()
+    {
+        _menuActions.Clear();
+        foreach (var setting in _working.Menu)
+        {
+            var definition = BrowserActionCatalog.Find(setting.ActionId);
+            if (definition?.ShowInMenu != true) continue;
+            _menuActions.Add(new MenuActionEditor
+            {
+                ActionId = setting.ActionId, Title = LocalizationService.Text(definition.LabelKey),
+                Visible = setting.Visible || definition.AlwaysVisible, IsOptional = !definition.AlwaysVisible
+            });
+        }
+        _shortcutActions.Clear();
+        foreach (var setting in _working.Shortcuts)
+        {
+            var definition = BrowserActionCatalog.Find(setting.ActionId);
+            if (definition is null) continue;
+            _shortcutActions.Add(new ShortcutActionEditor
+            {
+                ActionId = setting.ActionId, Title = LocalizationService.Text(definition.LabelKey), Gesture = setting.Gesture
+            });
+        }
+        MenuActionList.ItemsSource = _menuActions;
+        ShortcutActionList.ItemsSource = _shortcutActions;
+    }
+
+    private void SaveActionEditors()
+    {
+        _working.Menu = _menuActions.Select(x => new MenuActionSetting { ActionId = x.ActionId, Visible = x.Visible }).ToList();
+        _working.Shortcuts = _shortcutActions.Select(x => new ShortcutSetting { ActionId = x.ActionId, Gesture = x.Gesture.Trim() }).ToList();
+        BrowserActionCatalog.Normalize(_working);
+    }
+
+    private void ResetMenu_Click(object sender, RoutedEventArgs e)
+    {
+        _working.Menu = BrowserActionCatalog.DefaultMenuSettings();
+        LoadActionEditors();
+    }
+
+    private void ResetShortcuts_Click(object sender, RoutedEventArgs e)
+    {
+        _working.Shortcuts = BrowserActionCatalog.DefaultShortcutSettings();
+        LoadActionEditors();
+    }
+
+    private void MoveMenuUp_Click(object sender, RoutedEventArgs e) => MoveMenuItem(sender, -1);
+    private void MoveMenuDown_Click(object sender, RoutedEventArgs e) => MoveMenuItem(sender, 1);
+
+    private void MoveMenuItem(object sender, int direction)
+    {
+        if (sender is not Button { Tag: MenuActionEditor item }) return;
+        var index = _menuActions.IndexOf(item);
+        var destination = index + direction;
+        if (index < 0 || destination < 0 || destination >= _menuActions.Count) return;
+        _menuActions.Move(index, destination);
+    }
+
+    private void ShortcutBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox { DataContext: ShortcutActionEditor item } box) return;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if ((key is Key.Escape or Key.Back or Key.Delete) && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            item.Gesture = string.Empty;
+            box.Text = string.Empty;
+            e.Handled = true;
+            return;
+        }
+        if (ShortcutRouter.TryCapture(key, Keyboard.Modifiers, out var gesture))
+        {
+            item.Gesture = gesture;
+            box.Text = gesture;
+        }
+        e.Handled = true;
+    }
+
+    private void ClearShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: ShortcutActionEditor item }) return;
+        item.Gesture = string.Empty;
+        ShortcutActionList.Items.Refresh();
+    }
+
     private void BrowseBackground_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif", CheckFileExists = true };
@@ -219,6 +315,21 @@ public partial class SettingsWindow : Window
         if (MessageBox.Show(this, string.Format(LocalizationService.Text("SensitiveConfirmFirst"), operation), operation, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return false;
         return MessageBox.Show(this, string.Format(LocalizationService.Text("SensitiveConfirmFinal"), operation), operation, MessageBoxButton.YesNo, MessageBoxImage.Stop) == MessageBoxResult.Yes;
     }
+    private sealed class MenuActionEditor
+    {
+        public string ActionId { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public bool Visible { get; set; } = true;
+        public bool IsOptional { get; set; } = true;
+    }
+
+    private sealed class ShortcutActionEditor
+    {
+        public string ActionId { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Gesture { get; set; } = string.Empty;
+    }
+
     private static SettingChoice<T> Choice<T>(T value, string resourceKey) where T : struct, Enum => new(value, LocalizationService.Text(resourceKey));
     private static AppSettings Clone(AppSettings source) => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(source)) ?? new AppSettings();
 }

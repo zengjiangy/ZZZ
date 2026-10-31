@@ -25,6 +25,12 @@ public static class WebDarkModeService
           window.__zzzStrongDarkActive = true;
           const SKIP = new Set(['IMG','VIDEO','CANVAS','SVG','PICTURE','IFRAME','OBJECT','EMBED']);
           const seen = new WeakSet();
+          const scheduleIdle = callback => window.requestIdleCallback
+            ? window.requestIdleCallback(callback, { timeout: 100 })
+            : window.setTimeout(() => {
+              const started = Date.now();
+              callback({ timeRemaining: () => Math.max(0, 8 - Date.now() + started) });
+            }, 16);
           const parse = value => {
             const m = value && value.match(/rgba?\((\d+)[, ]+(\d+)[, ]+(\d+)(?:[, /]+([\d.]+))?\)/i);
             return m ? [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]] : null;
@@ -56,14 +62,18 @@ public static class WebDarkModeService
             }
             if (el.shadowRoot) processRoot(el.shadowRoot);
           };
-          const processRoot = root => {
+          const processRoot = (root, deadline = null) => {
             const all = root.querySelectorAll ? Array.from(root.querySelectorAll('*')) : [];
             let i = 0;
-            const batch = deadline => {
-              while (i < all.length && (!deadline || deadline.timeRemaining() > 2)) remap(all[i++]);
-              if (i < all.length) (window.requestIdleCallback || (f => setTimeout(() => f(null), 1)))(batch);
+            const batch = currentDeadline => {
+              let processed = 0;
+              while (i < all.length && (processed === 0 || !currentDeadline || currentDeadline.timeRemaining() > 2)) {
+                remap(all[i++]);
+                processed++;
+              }
+              if (i < all.length) scheduleIdle(batch);
             };
-            batch(null);
+            batch(deadline);
           };
           const start = () => {
             if (!document.documentElement) return;
@@ -72,9 +82,33 @@ public static class WebDarkModeService
             if (document.body) {
               document.body.style.setProperty('background-color','#111318','important');
               processRoot(document);
-              new MutationObserver(records => records.forEach(r => r.addedNodes.forEach(n => {
-                if (n instanceof Element) { remap(n); processRoot(n); }
-              }))).observe(document.documentElement, { childList:true, subtree:true });
+              const pendingRoots = new Set();
+              let flushScheduled = false;
+              const flushAddedRoots = deadline => {
+                flushScheduled = false;
+                let processed = 0;
+                while (pendingRoots.size && (processed === 0 || !deadline || deadline.timeRemaining() > 2)) {
+                  const root = pendingRoots.values().next().value;
+                  pendingRoots.delete(root);
+                  remap(root);
+                  processRoot(root, deadline);
+                  processed++;
+                }
+                if (pendingRoots.size) scheduleFlush();
+              };
+              const scheduleFlush = () => {
+                if (flushScheduled) return;
+                flushScheduled = true;
+                scheduleIdle(flushAddedRoots);
+              };
+              new MutationObserver(records => {
+                for (const record of records) {
+                  for (const node of record.addedNodes) {
+                    if (node instanceof Element) pendingRoots.add(node);
+                  }
+                }
+                scheduleFlush();
+              }).observe(document.documentElement, { childList:true, subtree:true });
             }
             const style = document.createElement('style');
             style.id = 'zzz-strong-dark-style';

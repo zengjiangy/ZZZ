@@ -3,6 +3,7 @@ using System.Net.Http;
 using ZZZ.Models;
 using ZZZ.Services;
 using ZZZ.Configuration;
+using System.Windows.Input;
 
 var failures = new List<string>();
 var passed = 0;
@@ -178,6 +179,9 @@ Check(AdBlockWebView2Mapper.FromWebView2(Microsoft.Web.WebView2.Core.CoreWebView
 Check(MediaPlaybackPolicy.MustAllow(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Media, "https://cdn.example/video", "https://site.example/"), "media responses bypass filter-list false positives");
 Check(MediaPlaybackPolicy.MustAllow(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Fetch, "https://rr4---sn.example.googlevideo.com/videoplayback?range=0-1", "https://www.youtube.com/watch?v=test"), "YouTube MSE playback relationship bypasses filter-list false positives");
 Check(!MediaPlaybackPolicy.MustAllow(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Fetch, "https://rr4---sn.example.googlevideo.com/videoplayback?range=0-1", "https://unrelated.example/"), "googlevideo bypass is scoped to YouTube documents");
+Check(MediaPlaybackPolicy.MustAllow(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Fetch, "https://upos-sz-mirror.bilivideo.com/upgcxcode/12/34/video.m4s?range=0-1", "https://www.bilibili.com/video/BV1test"), "Bilibili MSE playback relationship bypasses filter-list false positives");
+Check(!MediaPlaybackPolicy.MustAllow(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Fetch, "https://upos-sz-mirror.bilivideo.com/upgcxcode/12/34/video.m4s", "https://unrelated.example/"), "bilivideo bypass is scoped to Bilibili documents");
+Check(!MediaPlaybackPolicy.MustAllow(Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.Fetch, "https://upos-sz-mirror.bilivideo.com/ads/banner.js", "https://www.bilibili.com/video/BV1test"), "Bilibili bypass is limited to explicit media segments");
 Check(ExternalPlayerLauncher.Quote("https://example.com/watch?v=1&list=2") == "\"https://example.com/watch?v=1&list=2\"", "external player URL is passed as one argument");
 var encodedCssScript = AdBlockElementPicker.BuildApplyCssScript("</style><script>window.bad=true</script>");
 Check(!encodedCssScript.Contains("</style>") && !encodedCssScript.Contains("<script>"), "cosmetic CSS is JSON-encoded before script injection");
@@ -193,6 +197,28 @@ Check(assemblyVersion is not null &&
     $"{assemblyVersion!.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}" == AppVersion.Current,
     "assembly version and AppVersion.Current stay in lockstep");
 Check(AppVersion.UserAgentProduct == "ZZZ/" + AppVersion.Current, "user-agent product token derives from the single version source");
+
+// 2.3.0: WPF and WebView2 resolve the same configurable action table.
+var shortcutSettings = new AppSettings();
+Check(ShortcutRouter.TryResolve(shortcutSettings, Key.N, ModifierKeys.Control | ModifierKeys.Shift, out var privateAction, out _) && privateAction == BrowserActionIds.NewPrivateTab,
+    "default shortcut resolves its stable action identifier");
+Check(ShortcutRouter.TryResolve(shortcutSettings, Key.D5, ModifierKeys.Control, out var numberAction, out var selectedNumber) && numberAction == BrowserActionIds.SelectTabNumber && selectedNumber == 5,
+    "numbered tab shortcut preserves its requested tab");
+Check(!ShortcutRouter.TryResolve(shortcutSettings, Key.T, ModifierKeys.Control | ModifierKeys.Alt, out _, out _),
+    "shortcut modifiers use exact matching");
+shortcutSettings.Shortcuts.First(x => x.ActionId == BrowserActionIds.ReaderMode).Gesture = "Alt+R";
+Check(ShortcutRouter.TryResolve(shortcutSettings, Key.R, ModifierKeys.Alt, out var readerAction, out _) && readerAction == BrowserActionIds.ReaderMode &&
+    !ShortcutRouter.TryResolve(shortcutSettings, Key.F9, ModifierKeys.None, out _, out _),
+    "custom shortcut replaces the previous binding");
+Check(ShortcutRouter.FindDuplicateGesture(new[]
+{
+    new ShortcutSetting { ActionId = BrowserActionIds.NewTab, Gesture = "Ctrl+T" },
+    new ShortcutSetting { ActionId = BrowserActionIds.CloseTab, Gesture = "Ctrl+T" }
+}) == "Ctrl+T", "duplicate custom shortcuts are rejected before saving");
+shortcutSettings.Menu.First(x => x.ActionId == BrowserActionIds.Settings).Visible = false;
+BrowserActionCatalog.Normalize(shortcutSettings);
+Check(shortcutSettings.Menu.First(x => x.ActionId == BrowserActionIds.Settings).Visible,
+    "settings recovery entry cannot be hidden by imported configuration");
 
 // 2.2.2: closed public tabs can be reopened; private tabs and the built-in
 // start page must never enter the reopen list.

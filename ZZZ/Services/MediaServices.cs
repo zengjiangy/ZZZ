@@ -18,12 +18,25 @@ public static class MediaPlaybackPolicy
             !Uri.TryCreate(documentUrl, UriKind.Absolute, out var document))
             return false;
 
-        // YouTube delivers Media Source Extension segments from googlevideo.com.
-        // WebView2 can classify these POST requests as Fetch/Other instead of
-        // Media, so protect this first-party playback relationship explicitly.
+        // Bilibili and YouTube deliver Media Source Extension segments from
+        // dedicated CDNs. WebView2 can classify these requests as Fetch/Other,
+        // so protect only their explicit playback paths.
+        if (IsBilibili(document.Host) && IsBiliVideo(request.Host) &&
+            request.AbsolutePath.StartsWith("/upgcxcode/", StringComparison.OrdinalIgnoreCase) &&
+            request.AbsolutePath.EndsWith(".m4s", StringComparison.OrdinalIgnoreCase))
+            return true;
+
         return IsYouTube(document.Host) && IsGoogleVideo(request.Host) &&
             request.AbsolutePath.Equals("/videoplayback", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool IsBilibili(string host) =>
+        host.Equals("bilibili.com", StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith(".bilibili.com", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsBiliVideo(string host) =>
+        host.Equals("bilivideo.com", StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith(".bilivideo.com", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsYouTube(string host) =>
         host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase) ||

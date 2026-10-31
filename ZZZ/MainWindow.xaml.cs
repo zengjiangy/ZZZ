@@ -37,8 +37,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContextChanged += (_, e) =>
         {
-            if (e.OldValue is MainViewModel oldVm) { oldVm.PropertyChanged -= ViewModel_PropertyChanged; oldVm.Tabs.CollectionChanged -= Tabs_CollectionChanged; oldVm.Services.Browser.ShortcutRequested -= Browser_ShortcutRequested; }
-            if (e.NewValue is MainViewModel newVm) { newVm.PropertyChanged += ViewModel_PropertyChanged; newVm.Tabs.CollectionChanged += Tabs_CollectionChanged; newVm.Services.Browser.ShortcutRequested += Browser_ShortcutRequested; ShowSelectedTab(newVm.SelectedTab); }
+            if (e.OldValue is MainViewModel oldVm) { oldVm.PropertyChanged -= ViewModel_PropertyChanged; oldVm.Tabs.CollectionChanged -= Tabs_CollectionChanged; oldVm.Services.Browser.KeyRequested -= Browser_KeyRequested; }
+            if (e.NewValue is MainViewModel newVm) { newVm.PropertyChanged += ViewModel_PropertyChanged; newVm.Tabs.CollectionChanged += Tabs_CollectionChanged; newVm.Services.Browser.KeyRequested += Browser_KeyRequested; ShowSelectedTab(newVm.SelectedTab); }
         };
         SizeChanged += Window_SizeChanged;
     }
@@ -334,44 +334,16 @@ public partial class MainWindow : Window
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
-        var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
-        var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
-        var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
-        // WPF reports Alt combinations as Key.System with the real key in
-        // SystemKey; without this, Alt+Left/Right/D only worked while the web
-        // page had focus (where Chromium handles them) and were dead on the
-        // start page, address bar, and other WPF surfaces.
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        var home = BrowserHome.GetHomeUrl(ViewModel.Services.Settings.Current);
-        var tabNumber = ctrl && !shift && !alt ? TabNumberFromKey(key) : 0;
-        if (ctrl && shift && key == Key.N) { ViewModel.CreateTab(home, true); e.Handled = true; }
-        else if (ctrl && shift && key == Key.T) { ViewModel.ReopenClosedTabCommand.Execute(null); e.Handled = true; }
-        else if (ctrl && key == Key.T) { ViewModel.CreateTab(home); e.Handled = true; }
-        else if (ctrl && shift && key == Key.W && _splitTab is not null) { CloseSplit(); e.Handled = true; }
-        else if (ctrl && key == Key.W && ViewModel.SelectedTab is not null) { ViewModel.CloseTabCommand.Execute(ViewModel.SelectedTab); e.Handled = true; }
-        else if ((ctrl && key == Key.L) || (alt && key == Key.D)) { AddressBox.Focus(); AddressBox.SelectAll(); e.Handled = true; }
-        else if ((ctrl && key == Key.R) || key == Key.F5) { ViewModel.SelectedTab?.ReloadCommand.Execute(null); e.Handled = true; }
-        else if (ctrl && key == Key.P) { ViewModel.SelectedTab?.Print(); e.Handled = true; }
-        else if (ctrl && key == Key.F) { ShowFind(); e.Handled = true; }
-        else if (ctrl && (key == Key.Tab || key == Key.PageDown || key == Key.PageUp)) { ViewModel.SelectAdjacentTab(shift || key == Key.PageUp ? -1 : 1); e.Handled = true; }
-        else if (tabNumber > 0) { ViewModel.SelectTabNumber(tabNumber); e.Handled = true; }
-        else if (ctrl && !shift && key == Key.D) { ViewModel.AddBookmarkCommand.Execute(null); e.Handled = true; }
-        else if (ctrl && !shift && key == Key.H) { e.Handled = true; OpenLibrary(); }
-        else if (ctrl && !shift && key == Key.J) { new DownloadsWindow(ViewModel.Services.Downloads).Show(); e.Handled = true; }
-        else if (alt && key == Key.Left) { ViewModel.SelectedTab?.BackCommand.Execute(null); e.Handled = true; }
-        else if (alt && key == Key.Right) { ViewModel.SelectedTab?.ForwardCommand.Execute(null); e.Handled = true; }
-        else if (key == Key.F12) { OpenDeveloperTools(); e.Handled = true; }
-        else if (key == Key.F9) { ViewModel.SelectedTab?.ToggleReaderModeCommand.Execute(null); e.Handled = true; }
-        else if (key == Key.F11) { ToggleFullscreen(); e.Handled = true; }
-        else if (shift && key == Key.Escape) { new TaskManagerWindow(ViewModel).Show(); e.Handled = true; }
+        if (TryHandleShortcut(key, Keyboard.Modifiers, ViewModel.SelectedTab)) e.Handled = true;
     }
 
-    private static int TabNumberFromKey(Key key) => key switch
+    private bool TryHandleShortcut(Key key, ModifierKeys modifiers, BrowserTabViewModel? target)
     {
-        >= Key.D1 and <= Key.D9 => key - Key.D1 + 1,
-        >= Key.NumPad1 and <= Key.NumPad9 => key - Key.NumPad1 + 1,
-        _ => 0
-    };
+        if (!ShortcutRouter.TryResolve(ViewModel.Services.Settings.Current, key, modifiers, out var actionId, out var tabNumber)) return false;
+        _ = ExecuteActionAsync(actionId, target, tabNumber);
+        return true;
+    }
 
     private async void OpenLibrary()
     {
@@ -381,51 +353,109 @@ public partial class MainWindow : Window
 
     private void MenuButton_Click(object sender, RoutedEventArgs e)
     {
+        var settings = ViewModel.Services.Settings.Current;
         var menu = new ContextMenu();
-        var home = BrowserHome.GetHomeUrl(ViewModel.Services.Settings.Current);
-        menu.Items.Add(Item(LocalizationService.Text("NewTab"), (_, _) => ViewModel.CreateTab(home), "Ctrl+T"));
-        menu.Items.Add(Item(LocalizationService.Text("NewPrivateTab"), (_, _) => ViewModel.CreateTab(home, true), "Ctrl+Shift+N"));
-        menu.Items.Add(Item(LocalizationService.Text("Library"), async (_, _) =>
+        foreach (var configured in settings.Menu.Where(x => x.Visible))
         {
-            await ViewModel.Services.EnsureBackgroundInitializedAsync();
-            new LibraryWindow(ViewModel).ShowDialog();
-        }));
-        menu.Items.Add(Item(LocalizationService.Text("Downloads"), (_, _) => new DownloadsWindow(ViewModel.Services.Downloads).Show()));
-        menu.Items.Add(Item(LocalizationService.Text("BrowserTaskManager"), (_, _) => new TaskManagerWindow(ViewModel).Show(), "Shift+Esc"));
-        menu.Items.Add(new Separator());
-        menu.Items.Add(Item(LocalizationService.Text("SaveAsPdf"), async (_, _) => await (ViewModel.SelectedTab?.SaveAsPdfAsync() ?? Task.CompletedTask)));
-        menu.Items.Add(Item(LocalizationService.Text("SaveAsMht"), async (_, _) => await (ViewModel.SelectedTab?.SaveAsMhtAsync() ?? Task.CompletedTask)));
-        menu.Items.Add(Item(LocalizationService.Text("Print"), (_, _) => ViewModel.SelectedTab?.Print(), "Ctrl+P"));
-        menu.Items.Add(Item(LocalizationService.Text(ViewModel.SelectedTab?.IsReaderMode == true ? "ExitReadingMode" : "ReadingMode"), (_, _) => ViewModel.SelectedTab?.ToggleReaderModeCommand.Execute(null), "F9"));
-        menu.Items.Add(Item(LocalizationService.Text("FindInPage"), (_, _) => ShowFind(), "Ctrl+F"));
-        menu.Items.Add(BuildSplitMenu());
-        menu.Items.Add(Item(LocalizationService.Text("Fullscreen"), (_, _) => ToggleFullscreen(), "F11"));
-        menu.Items.Add(new Separator());
-        menu.Items.Add(Item(LocalizationService.Text("DeveloperTools"), (_, _) => OpenDeveloperTools(), "F12"));
-        menu.Items.Add(Item(LocalizationService.Text("ClearBrowsingData"), async (_, _) => await ClearBrowsingDataAsync()));
-        var theme = new MenuItem { Header = LocalizationService.Text("Theme") };
-        theme.Items.Add(ThemeItem(AppearanceMode.System, "FollowSystem"));
-        theme.Items.Add(ThemeItem(AppearanceMode.Light, "Light"));
-        theme.Items.Add(ThemeItem(AppearanceMode.Dark, "Dark"));
-        menu.Items.Add(theme);
-        var grayscale = new MenuItem
-        {
-            Header = LocalizationService.Text("GrayscaleMode"),
-            IsCheckable = true,
-            IsChecked = ViewModel.Services.Settings.Current.Ui.GrayscaleMode
-        };
-        grayscale.Click += async (_, _) =>
-        {
-            ViewModel.Services.Settings.Current.Ui.GrayscaleMode = !ViewModel.Services.Settings.Current.Ui.GrayscaleMode;
-            await ViewModel.Services.Settings.SaveAsync();
-            await ViewModel.ReapplySettingsAsync();
-        };
-        menu.Items.Add(grayscale);
-        menu.Items.Add(Item(LocalizationService.Text("Settings"), (_, _) => new SettingsWindow(ViewModel).ShowDialog()));
-        menu.Items.Add(new Separator());
-        menu.Items.Add(Item(LocalizationService.Text("Exit"), (_, _) => Close()));
-        menu.PlacementTarget = MenuButton;
+            var definition = BrowserActionCatalog.Find(configured.ActionId);
+            if (definition?.ShowInMenu != true) continue;
+            if (definition.SeparatorBefore && menu.Items.Count > 0 && menu.Items[menu.Items.Count - 1] is not Separator) menu.Items.Add(new Separator());
+            menu.Items.Add(CreateMenuAction(definition.Id));
+        }
+        menu.PlacementTarget = sender as UIElement ?? MenuButton;
         menu.IsOpen = true;
+    }
+
+    private MenuItem CreateMenuAction(string actionId)
+    {
+        var settings = ViewModel.Services.Settings.Current;
+        if (actionId == BrowserActionIds.SplitScreen) return BuildSplitMenu();
+        if (actionId == BrowserActionIds.Theme)
+        {
+            var theme = new MenuItem { Header = LocalizationService.Text("Theme") };
+            theme.Items.Add(ThemeItem(AppearanceMode.System, "FollowSystem"));
+            theme.Items.Add(ThemeItem(AppearanceMode.Light, "Light"));
+            theme.Items.Add(ThemeItem(AppearanceMode.Dark, "Dark"));
+            return theme;
+        }
+        if (actionId == BrowserActionIds.Grayscale)
+        {
+            var grayscale = new MenuItem
+            {
+                Header = LocalizationService.Text("GrayscaleMode"), IsCheckable = true,
+                IsChecked = settings.Ui.GrayscaleMode
+            };
+            grayscale.Click += async (_, _) => await ExecuteActionAsync(actionId);
+            return grayscale;
+        }
+        var definition = BrowserActionCatalog.Find(actionId)!;
+        var labelKey = actionId == BrowserActionIds.ReaderMode && ViewModel.SelectedTab?.IsReaderMode == true
+            ? "ExitReadingMode" : definition.LabelKey;
+        var item = Item(LocalizationService.Text(labelKey), async (_, _) => await ExecuteActionAsync(actionId),
+            ShortcutRouter.GestureFor(settings, actionId));
+        return item;
+    }
+
+    private async Task ExecuteActionAsync(string actionId, BrowserTabViewModel? target = null, int tabNumber = 0)
+    {
+        var tab = target ?? ViewModel.SelectedTab;
+        var settings = ViewModel.Services.Settings.Current;
+        switch (actionId)
+        {
+            case BrowserActionIds.NewTab: ViewModel.CreateTab(BrowserHome.GetHomeUrl(settings)); break;
+            case BrowserActionIds.NewPrivateTab: ViewModel.CreateTab(BrowserHome.GetHomeUrl(settings), true); break;
+            case BrowserActionIds.CloseTab when tab is not null: ViewModel.CloseTabCommand.Execute(tab); break;
+            case BrowserActionIds.ReopenClosedTab: ViewModel.ReopenClosedTabCommand.Execute(null); break;
+            case BrowserActionIds.FocusAddress: await RestoreChromeAsync(focusAddress: true, restoreAll: false); break;
+            case BrowserActionIds.RestoreInterface: await RestoreChromeAsync(focusAddress: false, restoreAll: true); break;
+            case BrowserActionIds.Reload: tab?.ReloadCommand.Execute(null); break;
+            case BrowserActionIds.Back: tab?.BackCommand.Execute(null); break;
+            case BrowserActionIds.Forward: tab?.ForwardCommand.Execute(null); break;
+            case BrowserActionIds.Bookmark: ViewModel.AddBookmarkCommand.Execute(null); break;
+            case BrowserActionIds.Library:
+                await ViewModel.Services.EnsureBackgroundInitializedAsync();
+                new LibraryWindow(ViewModel).ShowDialog();
+                break;
+            case BrowserActionIds.Downloads: new DownloadsWindow(ViewModel.Services.Downloads).Show(); break;
+            case BrowserActionIds.TaskManager: new TaskManagerWindow(ViewModel).Show(); break;
+            case BrowserActionIds.SavePdf: await (tab?.SaveAsPdfAsync() ?? Task.CompletedTask); break;
+            case BrowserActionIds.SaveMht: await (tab?.SaveAsMhtAsync() ?? Task.CompletedTask); break;
+            case BrowserActionIds.Print: tab?.Print(); break;
+            case BrowserActionIds.ReaderMode when tab is not null: await tab.ToggleReaderModeCommand.ExecuteAsync(null); break;
+            case BrowserActionIds.Find: ShowFind(tab); break;
+            case BrowserActionIds.NextTab: ViewModel.SelectAdjacentTab(1); break;
+            case BrowserActionIds.PreviousTab: ViewModel.SelectAdjacentTab(-1); break;
+            case BrowserActionIds.SelectTabNumber: ViewModel.SelectTabNumber(tabNumber); break;
+            case BrowserActionIds.CloseSplit: if (_splitTab is not null) CloseSplit(); break;
+            case BrowserActionIds.Fullscreen: ToggleFullscreen(); break;
+            case BrowserActionIds.DeveloperTools: OpenDeveloperTools(); break;
+            case BrowserActionIds.ClearData: await ClearBrowsingDataAsync(); break;
+            case BrowserActionIds.Grayscale:
+                settings.Ui.GrayscaleMode = !settings.Ui.GrayscaleMode;
+                await ViewModel.Services.Settings.SaveAsync();
+                await ViewModel.ReapplySettingsAsync();
+                break;
+            case BrowserActionIds.Settings: new SettingsWindow(ViewModel).ShowDialog(); break;
+            case BrowserActionIds.Exit: Close(); break;
+        }
+    }
+
+    private async Task RestoreChromeAsync(bool focusAddress, bool restoreAll)
+    {
+        if (_isFullscreen) ToggleFullscreen();
+        var ui = ViewModel.Services.Settings.Current.Ui;
+        ui.ShowToolbar = true;
+        ui.ShowAddressBar = true;
+        if (restoreAll) ui.ShowTabBar = true;
+        ViewModel.RefreshChromeLayout();
+        if (focusAddress)
+        {
+            UpdateLayout();
+            AddressBox.Focus();
+            AddressBox.SelectAll();
+        }
+        try { await ViewModel.Services.Settings.SaveAsync(); }
+        catch { /* Recovery must still work when the settings directory is read-only. */ }
     }
 
     private static MenuItem Item(string title, RoutedEventHandler handler, string gesture = "")
@@ -601,13 +631,13 @@ public partial class MainWindow : Window
             _stateBeforeFullscreen = WindowState;
             _styleBeforeFullscreen = WindowStyle;
             _resizeBeforeFullscreen = ResizeMode;
-            TabBar.Visibility = Toolbar.Visibility = StatusBar.Visibility = Visibility.Collapsed;
+            TabBar.Visibility = VerticalTabBar.Visibility = Toolbar.Visibility = StatusBar.Visibility = Visibility.Collapsed;
             WindowState = WindowState.Normal; WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; WindowState = WindowState.Maximized;
         }
         else
         {
             WindowState = WindowState.Normal; WindowStyle = _styleBeforeFullscreen; ResizeMode = _resizeBeforeFullscreen; WindowState = _stateBeforeFullscreen;
-            TabBar.Visibility = ViewModel.Services.Settings.Current.Ui.ShowTabBar ? Visibility.Visible : Visibility.Collapsed;
+            ViewModel.RefreshChromeLayout();
             Toolbar.Visibility = ViewModel.Services.Settings.Current.Ui.ShowToolbar ? Visibility.Visible : Visibility.Collapsed;
             StatusBar.Visibility = Visibility.Visible;
         }
@@ -624,52 +654,9 @@ public partial class MainWindow : Window
         if (e.Key == Key.Enter) { await ((_findTab ?? ViewModel.SelectedTab)?.FindAsync(FindBox.Text, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) ?? Task.CompletedTask); e.Handled = true; }
     }
 
-    private void Browser_ShortcutRequested(object? sender, BrowserShortcutEventArgs e)
+    private void Browser_KeyRequested(object? sender, BrowserKeyEventArgs e)
     {
-        switch (e.Shortcut)
-        {
-            case BrowserShortcut.Find:
-                e.Handled = true;
-                Dispatcher.BeginInvoke(new Action(() => ShowFind(e.Tab)));
-                break;
-            case BrowserShortcut.CloseSplit when _splitTab is not null:
-                e.Handled = true;
-                Dispatcher.BeginInvoke(new Action(CloseSplit));
-                break;
-            case BrowserShortcut.TaskManager:
-                e.Handled = true;
-                Dispatcher.BeginInvoke(new Action(() => new TaskManagerWindow(ViewModel).Show()));
-                break;
-            case BrowserShortcut.NextTab:
-                e.Handled = true;
-                Dispatcher.BeginInvoke(new Action(() => ViewModel.SelectAdjacentTab(1)));
-                break;
-            case BrowserShortcut.PreviousTab:
-                e.Handled = true;
-                Dispatcher.BeginInvoke(new Action(() => ViewModel.SelectAdjacentTab(-1)));
-                break;
-            case BrowserShortcut.SelectTabNumber:
-                e.Handled = true;
-                var number = e.TabNumber;
-                Dispatcher.BeginInvoke(new Action(() => ViewModel.SelectTabNumber(number)));
-                break;
-            case BrowserShortcut.ToggleBookmark:
-                e.Handled = true;
-                Dispatcher.BeginInvoke(new Action(() => ViewModel.AddBookmarkCommand.Execute(null)));
-                break;
-            case BrowserShortcut.ReopenClosedTab:
-                e.Handled = true;
-                Dispatcher.BeginInvoke(new Action(() => ViewModel.ReopenClosedTabCommand.Execute(null)));
-                break;
-            case BrowserShortcut.Library:
-                e.Handled = true;
-                Dispatcher.BeginInvoke(new Action(OpenLibrary));
-                break;
-            case BrowserShortcut.Downloads:
-                e.Handled = true;
-                Dispatcher.BeginInvoke(new Action(() => new DownloadsWindow(ViewModel.Services.Downloads).Show()));
-                break;
-        }
+        e.Handled = TryHandleShortcut(e.Key, e.Modifiers, e.Tab);
     }
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e)

@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to (re)publish, e.g. v2.2.2'
+        description: 'Existing tag to (re)publish, e.g. v2.3.0'
         required: true
 
 permissions:

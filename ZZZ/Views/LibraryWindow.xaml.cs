@@ -65,7 +65,7 @@ public partial class LibraryWindow : Window
         catch (Exception ex) { MessageBox.Show(this, ex.Message, LocalizationService.Text("Userscripts"), MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
     private void RemoveScript_Click(object sender, RoutedEventArgs e) { if (ScriptsGrid.SelectedItem is UserScript s && ConfirmSensitive("RemoveScript")) _scripts.Remove(s); }
-    private async void SaveScripts_Click(object sender, RoutedEventArgs e) { ScriptsGrid.CommitEdit(); await _main.Services.UserScripts.SaveAsync(_scripts); await _main.ReapplySettingsAsync(); }
+    private async void SaveScripts_Click(object sender, RoutedEventArgs e) { ScriptsGrid.CommitEdit(); await _main.Services.UserScripts.SaveAsync(_scripts); await _main.ReapplySettingsAsync(reloadPages: true); }
     private void ScriptsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
     private void BookmarkGroupFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshBookmarkView();
     private void BookmarkSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshBookmarkView();

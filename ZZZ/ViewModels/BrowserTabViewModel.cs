@@ -14,8 +14,16 @@ namespace ZZZ.ViewModels;
 
 public partial class BrowserTabViewModel : ObservableObject
 {
+    private const int ReaderModeMaxAttempts = 8;
+    private static readonly TimeSpan ReaderModeRetryDelay = TimeSpan.FromMilliseconds(450);
     private readonly AppServices _services;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
+    private CancellationTokenSource? _readerModeCancellation;
+    private TaskCompletionSource<bool>? _readerModeRetrySignal;
+    private int _readerModeGeneration;
+    private int _readerModeAttempts;
+    private bool _readerModePending;
+    private bool _readerModeRetryRequested;
     private WebView2? _view;
     private string _googleTranslationOriginalUrl = string.Empty;
     [ObservableProperty] private string id = Guid.NewGuid().ToString("N");
@@ -64,6 +72,7 @@ public partial class BrowserTabViewModel : ObservableObject
 
     public void Detach()
     {
+        CancelReaderModeRequest();
         _view = null;
         IsReaderMode = false;
         ToggleReaderModeCommand.NotifyCanExecuteChanged();
@@ -73,12 +82,14 @@ public partial class BrowserTabViewModel : ObservableObject
     {
         if (IsClosed) return;
         IsClosed = true;
+        CancelReaderModeRequest();
         _lifetimeCancellation.Cancel();
     }
     public void Activate() => LastActiveUtc = DateTime.UtcNow;
 
     public void BeginNavigation(string target)
     {
+        CancelReaderModeRequest();
         if (IsReaderMode && _view?.CoreWebView2 is { } core)
             _ = IgnoreScriptErrorAsync(core, ReaderDisableScript);
         IsReaderMode = false;
@@ -123,29 +134,37 @@ public partial class BrowserTabViewModel : ObservableObject
 
     public void AddMedia(string url, string kind, string mimeType = "", long? contentLength = null)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        void Update()
         {
             var existing = MediaResources.FirstOrDefault(x => x.Url == url);
             if (existing is not null)
             {
-                var index = MediaResources.IndexOf(existing);
-                MediaResources[index] = new MediaResource
+                var nextKind = string.IsNullOrWhiteSpace(kind) ? existing.Kind : kind;
+                var nextMimeType = string.IsNullOrWhiteSpace(mimeType) ? existing.MimeType : mimeType;
+                var nextContentLength = contentLength ?? existing.ContentLength;
+                if (existing.Kind == nextKind && existing.MimeType == nextMimeType && existing.ContentLength == nextContentLength) return;
+                MediaResources[MediaResources.IndexOf(existing)] = new MediaResource
                 {
                     Url = url,
-                    Kind = string.IsNullOrWhiteSpace(kind) ? existing.Kind : kind,
-                    MimeType = string.IsNullOrWhiteSpace(mimeType) ? existing.MimeType : mimeType,
-                    ContentLength = contentLength ?? existing.ContentLength
+                    Kind = nextKind,
+                    MimeType = nextMimeType,
+                    ContentLength = nextContentLength
                 };
                 return;
             }
             if (MediaResources.Count >= 300) MediaResources.RemoveAt(0);
             MediaResources.Add(new MediaResource { Url = url, Kind = kind, MimeType = mimeType, ContentLength = contentLength });
             OnPropertyChanged(nameof(HasMedia));
-        });
+        }
+
+        var dispatcher = App.Current.Dispatcher;
+        if (dispatcher.CheckAccess()) Update();
+        else dispatcher.BeginInvoke(new Action(Update));
     }
 
     partial void OnUrlChanged(string value)
     {
+        CancelReaderModeRequest();
         if (IsReaderMode && _view?.CoreWebView2 is { } core)
             _ = IgnoreScriptErrorAsync(core, ReaderDisableScript);
         IsReaderMode = false;
@@ -232,24 +251,117 @@ public partial class BrowserTabViewModel : ObservableObject
     private async Task ToggleReaderModeAsync()
     {
         if (_view?.CoreWebView2 is not { } core) return;
-        try
+        if (IsReaderMode || _readerModePending)
         {
-            if (IsReaderMode)
+            var generation = CancelReaderModeRequest();
+            try
             {
                 await core.ExecuteScriptAsync(ReaderDisableScript);
+                if (generation != _readerModeGeneration || IsClosed || !ReferenceEquals(_view?.CoreWebView2, core)) return;
                 IsReaderMode = false;
                 Status = string.Empty;
-                return;
             }
-            var result = await core.ExecuteScriptAsync(ReaderEnableScript);
-            var enabled = string.Equals(result, "true", StringComparison.OrdinalIgnoreCase);
-            IsReaderMode = enabled;
-            Status = enabled ? string.Empty : LocalizationService.Text("ReaderModeUnavailable");
+            catch
+            {
+                if (generation != _readerModeGeneration || IsClosed || !ReferenceEquals(_view?.CoreWebView2, core)) return;
+                IsReaderMode = false;
+                Status = LocalizationService.Text("ReaderModeUnavailable");
+            }
+            return;
+        }
+
+        var requestGeneration = BeginReaderModeRequest();
+        await RunReaderModeRequestAsync(core, requestGeneration, _readerModeCancellation!.Token);
+    }
+
+    private int BeginReaderModeRequest()
+    {
+        var generation = CancelReaderModeRequest();
+        _readerModeCancellation = CancellationTokenSource.CreateLinkedTokenSource(LifetimeToken);
+        _readerModePending = true;
+        _readerModeAttempts = 0;
+        Status = string.Empty;
+        return generation;
+    }
+
+    private int CancelReaderModeRequest()
+    {
+        _readerModeGeneration++;
+        _readerModePending = false;
+        _readerModeRetryRequested = false;
+        _readerModeRetrySignal?.TrySetResult(true);
+        _readerModeRetrySignal = null;
+        _readerModeCancellation?.Cancel();
+        _readerModeCancellation?.Dispose();
+        _readerModeCancellation = null;
+        return _readerModeGeneration;
+    }
+
+    private void FinishReaderModeRequest(int generation)
+    {
+        if (generation != _readerModeGeneration) return;
+        _readerModePending = false;
+        _readerModeRetryRequested = false;
+        _readerModeRetrySignal = null;
+        _readerModeCancellation?.Dispose();
+        _readerModeCancellation = null;
+    }
+
+    private bool IsReaderModeRequestCurrent(CoreWebView2 core, int generation, CancellationToken cancellationToken) =>
+        generation == _readerModeGeneration &&
+        _readerModePending &&
+        !cancellationToken.IsCancellationRequested &&
+        !IsClosed &&
+        ReferenceEquals(_view?.CoreWebView2, core);
+
+    internal void RetryPendingReaderMode(CoreWebView2 core)
+    {
+        if (!_readerModePending || IsClosed || !ReferenceEquals(_view?.CoreWebView2, core)) return;
+        _readerModeRetryRequested = true;
+        _readerModeRetrySignal?.TrySetResult(true);
+    }
+
+    private async Task RunReaderModeRequestAsync(CoreWebView2 core, int generation, CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (IsReaderModeRequestCurrent(core, generation, cancellationToken) && _readerModeAttempts < ReaderModeMaxAttempts)
+            {
+                _readerModeAttempts++;
+                var result = await core.ExecuteScriptAsync(ReaderEnableScript);
+                if (!IsReaderModeRequestCurrent(core, generation, cancellationToken)) return;
+                if (string.Equals(result, "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    IsReaderMode = true;
+                    Status = string.Empty;
+                    FinishReaderModeRequest(generation);
+                    return;
+                }
+                if (_readerModeAttempts >= ReaderModeMaxAttempts) break;
+                if (_readerModeRetryRequested)
+                {
+                    _readerModeRetryRequested = false;
+                    continue;
+                }
+
+                var retrySignal = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _readerModeRetrySignal = retrySignal;
+                await Task.WhenAny(Task.Delay(ReaderModeRetryDelay, cancellationToken), retrySignal.Task);
+                if (ReferenceEquals(_readerModeRetrySignal, retrySignal)) _readerModeRetrySignal = null;
+                _readerModeRetryRequested = false;
+            }
+
+            if (!IsReaderModeRequestCurrent(core, generation, cancellationToken)) return;
+            IsReaderMode = false;
+            Status = LocalizationService.Text("ReaderModeUnavailable");
+            FinishReaderModeRequest(generation);
         }
         catch
         {
+            if (!IsReaderModeRequestCurrent(core, generation, cancellationToken)) return;
             IsReaderMode = false;
             Status = LocalizationService.Text("ReaderModeUnavailable");
+            FinishReaderModeRequest(generation);
         }
     }
 

@@ -149,7 +149,7 @@ public sealed class FaviconCacheService
     {
         if (bitmap.PixelWidth < 8 || bitmap.PixelHeight < 8 || bitmap.PixelWidth > 2048 || bitmap.PixelHeight > 2048) return false;
         var ratio = bitmap.PixelWidth / (double)bitmap.PixelHeight;
-        return ratio is >= 0.5 and <= 2;
+        return ratio is >= 0.25 and <= 4;
     }
 
     private static ImageSource? Decode(byte[] png)
@@ -160,7 +160,7 @@ public sealed class FaviconCacheService
             var image = new BitmapImage();
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
-            image.DecodePixelWidth = 32;
+            image.DecodePixelWidth = 64;
             image.StreamSource = stream;
             image.EndInit();
             image.Freeze();
