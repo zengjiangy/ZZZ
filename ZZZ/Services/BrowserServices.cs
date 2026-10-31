@@ -171,6 +171,7 @@ public sealed class BrowserLifecycleService : IBrowserLifecycleService
     private readonly IPrivacyService _privacy;
     private readonly ITranslationService _translation;
     private readonly FaviconCacheService _favicons;
+    private readonly HashSet<string> _faviconUpgradeAttempts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<BrowserTabViewModel, WeakReference<WebView2>> _views = [];
     private readonly Dictionary<CoreWebView2, string> _darkScriptIds = [];
     private readonly Dictionary<CoreWebView2, string> _grayscaleScriptIds = [];
@@ -758,6 +759,23 @@ style.textContent='html{{filter:grayscale(1)!important}}';
             if (!tab.IsClosed && string.Equals(tab.Url, sourceUrl, StringComparison.OrdinalIgnoreCase) && image is not null) tab.Favicon = image;
         }
         catch { }
+
+        // WebView2 often exposes only a 16/32 px favicon even when the site's
+        // original ICO contains high-DPI frames. Upgrade once per origin from
+        // the site's own favicon.ico, without repeating requests on every tab.
+        if (!tab.IsPrivate && Uri.TryCreate(sourceUrl, UriKind.Absolute, out var pageUri) &&
+            _faviconUpgradeAttempts.Add(pageUri.GetLeftPart(UriPartial.Authority)))
+        {
+            try
+            {
+                var image = await _favicons.GetOrFetchAsync(sourceUrl, persist: true, bypassCache: true);
+                if (!tab.IsClosed && string.Equals(tab.Url, sourceUrl, StringComparison.OrdinalIgnoreCase) && image is not null &&
+                    (tab.Favicon is not System.Windows.Media.Imaging.BitmapSource current || image is not System.Windows.Media.Imaging.BitmapSource candidate ||
+                     Math.Max(candidate.PixelWidth, candidate.PixelHeight) >= Math.Max(current.PixelWidth, current.PixelHeight)))
+                    tab.Favicon = image;
+            }
+            catch { }
+        }
     }
 
     public async Task ApplyCurrentSettingsAsync(bool reloadPages)

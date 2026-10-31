@@ -18,6 +18,17 @@
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
+        <Style x:Key="StartPageSearchTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
+                <Border x:Name="SearchBorder" Background="{TemplateBinding Background}" BorderBrush="{DynamicResource StartPageBorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="13">
+                    <ScrollViewer x:Name="PART_ContentHost" Margin="0" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="SearchBorder" Property="BorderBrush" Value="{DynamicResource StartPageForegroundBrush}"/><Setter TargetName="SearchBorder" Property="BorderThickness" Value="1"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
     </UserControl.Resources>
     <Grid x:Name="Root">
         <Image x:Name="BackgroundImage" Stretch="UniformToFill" IsHitTestVisible="False"/>
@@ -36,7 +47,7 @@
                 <Border.Effect><DropShadowEffect BlurRadius="28" ShadowDepth="8" Opacity="0.22" Color="#180F2B"/></Border.Effect>
                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
                     <Path Width="18" Height="18" Stroke="{DynamicResource StartPageForegroundBrush}" Opacity="0.72" StrokeThickness="1.7" StrokeStartLineCap="Round" Data="M15,15 L20,20 M17,10 A7,7 0 1 1 3,10 A7,7 0 1 1 17,10" Stretch="Uniform"/>
-                    <TextBox x:Name="SearchBox" Grid.Column="1" Height="58" MinWidth="350" Padding="0" FontSize="17"
+                    <TextBox x:Name="SearchBox" Grid.Column="1" Height="58" MinWidth="350" Padding="0" FontSize="17" Style="{StaticResource StartPageSearchTextBox}"
                              VerticalContentAlignment="Center" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource StartPageForegroundBrush}"
                              CaretBrush="{DynamicResource StartPageForegroundBrush}" KeyDown="SearchBox_KeyDown" ToolTip="{DynamicResource AddressPlaceholder}"/>
                     <Border Grid.Column="2" Width="32" Height="32" CornerRadius="10" Background="#20FFFFFF" VerticalAlignment="Center"><TextBlock Text="↵" Foreground="{DynamicResource StartPageForegroundBrush}" Opacity="0.72" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>

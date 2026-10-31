@@ -3,6 +3,7 @@ using System.Net.Http;
 using ZZZ.Models;
 using ZZZ.Services;
 using ZZZ.Configuration;
+using ZZZ.ViewModels;
 using System.Windows.Input;
 
 var failures = new List<string>();
@@ -219,6 +220,15 @@ shortcutSettings.Menu.First(x => x.ActionId == BrowserActionIds.Settings).Visibl
 BrowserActionCatalog.Normalize(shortcutSettings);
 Check(shortcutSettings.Menu.First(x => x.ActionId == BrowserActionIds.Settings).Visible,
     "settings recovery entry cannot be hidden by imported configuration");
+
+// 2.3.1: reader mode keeps inline typography and uses an isolated canvas.
+var readerScript = (string?)typeof(BrowserTabViewModel).GetField("ReaderEnableScript", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)?.GetRawConstantValue() ?? string.Empty;
+Check(readerScript.Contains("'SPAN'") && readerScript.Contains("#__zzzReaderMode span{display:inline!important}"),
+    "reader mode preserves inline spans instead of splitting sentences into block elements");
+Check(readerScript.Contains("html.__zzzReaderActive>body{display:none!important}") && readerScript.Contains("document.documentElement.appendChild(overlay)"),
+    "reader canvas is isolated from the source page layout and styles");
+Check(readerScript.Contains("paragraphText+paragraphs*90") && readerScript.Contains("characters<200"),
+    "reader extraction scores real paragraphs and retains shorter articles");
 
 // 2.2.2: closed public tabs can be reopened; private tabs and the built-in
 // start page must never enter the reopen list.
@@ -472,6 +482,16 @@ async Task CheckProtectedBrowserDataAsync()
         var preferredPixels = new byte[preferredFavicon?.PixelWidth * preferredFavicon?.Format.BitsPerPixel / 8 ?? 0];
         preferredFavicon?.CopyPixels(new System.Windows.Int32Rect(0, 0, preferredFavicon.PixelWidth, 1), preferredPixels, preferredPixels.Length, 0);
         Check(preferredPixels.Length >= 4 && preferredPixels[0] > preferredPixels[2], "multi-frame favicons prefer the largest high-resolution frame instead of the first legacy frame");
+        var highResolutionPixels = Enumerable.Repeat((byte)0xA5, 256 * 256 * 4).ToArray();
+        var highResolutionFrame = System.Windows.Media.Imaging.BitmapSource.Create(256, 256, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, highResolutionPixels, 256 * 4);
+        var highResolutionEncoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        highResolutionEncoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(highResolutionFrame));
+        using var highResolutionStream = new MemoryStream();
+        highResolutionEncoder.Save(highResolutionStream);
+        highResolutionStream.Position = 0;
+        var normalizedHighResolution = await faviconCache.CaptureAsync("https://high-resolution-favicon.example/", highResolutionStream, persist: false) as System.Windows.Media.Imaging.BitmapSource;
+        Check(normalizedHighResolution?.PixelWidth == 128 && normalizedHighResolution.PixelHeight == 128,
+            "favicon normalization retains 128px detail for high-DPI tab rendering");
 
         Check(AppPaths.PrivateWebViewRoot.StartsWith(isolatedRoot, StringComparison.OrdinalIgnoreCase), "private WebView data follows the selected data root");
     }

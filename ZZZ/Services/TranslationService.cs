@@ -15,9 +15,9 @@ public interface ITranslationService
 }
 
 /// <summary>
-/// Translates the current DOM in place using the same token service and request
-/// identity used by Microsoft Edge. This avoids region-blocked translation
-/// proxy pages and keeps the user on the original site.
+/// Translates the current DOM in place using Microsoft Edge's current public
+/// translation endpoint. This avoids proxy pages and keeps the user on the
+/// original site.
 /// </summary>
 public sealed class TranslationService : ITranslationService, IDisposable
 {
@@ -50,10 +50,8 @@ public sealed class TranslationService : ITranslationService, IDisposable
         })()
         """;
 
-    private readonly HttpClient _client = new() { Timeout = TimeSpan.FromSeconds(25) };
+    private readonly HttpClient _client = new() { Timeout = TimeSpan.FromSeconds(20) };
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private string _token = string.Empty;
-    private DateTime _tokenExpiresUtc;
 
     public TranslationService()
     {
@@ -85,7 +83,7 @@ public sealed class TranslationService : ITranslationService, IDisposable
             var translated = new List<PageSegment>(segments.Count);
             foreach (var batch in Batch(segments, 40, 12000))
             {
-                var values = await TranslateBatchAsync(batch.Select(x => x.Text).ToArray(), NormalizeLanguage(targetLanguage), true);
+                var values = await TranslateBatchAsync(batch.Select(x => x.Text).ToArray(), NormalizeLanguage(targetLanguage));
                 for (var i = 0; i < batch.Count && i < values.Count; i++)
                     translated.Add(new PageSegment { Id = batch[i].Id, Text = string.IsNullOrWhiteSpace(values[i]) ? batch[i].Text : values[i] });
             }
@@ -138,35 +136,19 @@ public sealed class TranslationService : ITranslationService, IDisposable
         finally { _gate.Release(); }
     }
 
-    private async Task<IReadOnlyList<string>> TranslateBatchAsync(IReadOnlyList<string> texts, string target, bool allowTokenRefresh)
+    private async Task<IReadOnlyList<string>> TranslateBatchAsync(IReadOnlyList<string> texts, string target)
     {
-        var token = await GetTokenAsync();
-        var requestBody = JsonSerializer.Serialize(texts.Select(x => new Dictionary<string, string> { ["Text"] = x }));
+        // Microsoft retired /translate/auth. The current Edge endpoint accepts a
+        // JSON string array directly and does not use the old bearer-token flow.
+        var requestBody = JsonSerializer.Serialize(texts);
         using var request = new HttpRequestMessage(HttpMethod.Post,
-            $"https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&to={Uri.EscapeDataString(target)}");
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            $"https://edge.microsoft.com/translate/translatetext?from=&to={Uri.EscapeDataString(target)}&isEnterpriseClient=false");
         request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
         using var response = await _client.SendAsync(request);
-        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && allowTokenRefresh)
-        {
-            _tokenExpiresUtc = DateTime.MinValue;
-            return await TranslateBatchAsync(texts, target, false);
-        }
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
         var items = JsonSerializer.Deserialize<List<TranslationResponse>>(json, JsonOptions) ?? [];
         return items.Select(x => x.Translations.FirstOrDefault()?.Text ?? string.Empty).ToArray();
-    }
-
-    private async Task<string> GetTokenAsync()
-    {
-        if (_tokenExpiresUtc > DateTime.UtcNow.AddMinutes(1) && _token.Length > 0) return _token;
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://edge.microsoft.com/translate/auth");
-        using var response = await _client.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-        _token = (await response.Content.ReadAsStringAsync()).Trim();
-        _tokenExpiresUtc = DateTime.UtcNow.AddMinutes(8);
-        return _token;
     }
 
     private static List<List<PageSegment>> Batch(IReadOnlyList<PageSegment> items, int maxItems, int maxCharacters)

@@ -9,8 +9,8 @@ namespace ZZZ.Services;
 
 public sealed class FaviconCacheService
 {
-    private static readonly byte[] Header = [0x5A, 0x46, 0x41, 0x56, 0x03];
-    private static readonly byte[] Entropy = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes("ZZZ.FaviconCache.v3"));
+    private static readonly byte[] Header = [0x5A, 0x46, 0x41, 0x56, 0x04];
+    private static readonly byte[] Entropy = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes("ZZZ.FaviconCache.v4"));
     private static readonly HttpClient Client = CreateClient();
     private readonly Dictionary<string, ImageSource> _memory = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _gate = new();
@@ -64,9 +64,9 @@ public sealed class FaviconCacheService
         return image;
     }
 
-    public async Task<ImageSource?> GetOrFetchAsync(string url, bool persist = true, CancellationToken cancellationToken = default)
+    public async Task<ImageSource?> GetOrFetchAsync(string url, bool persist = true, CancellationToken cancellationToken = default, bool bypassCache = false)
     {
-        var cached = GetCached(url);
+        var cached = bypassCache ? null : GetCached(url);
         if (cached is not null) return cached;
         if (!Uri.TryCreate(url, UriKind.Absolute, out var page) || page.Scheme is not ("http" or "https") || string.IsNullOrWhiteSpace(page.IdnHost)) return null;
         var faviconUrl = new Uri(page.GetLeftPart(UriPartial.Authority).TrimEnd('/') + "/favicon.ico");
@@ -134,7 +134,7 @@ public sealed class FaviconCacheService
                 .ThenByDescending(frame => frame.PixelWidth * (long)frame.PixelHeight)
                 .FirstOrDefault();
             if (bitmap is null) return [];
-            var scale = Math.Min(1d, 64d / Math.Max(bitmap.PixelWidth, bitmap.PixelHeight));
+            var scale = Math.Min(1d, 128d / Math.Max(bitmap.PixelWidth, bitmap.PixelHeight));
             if (scale < 1d) bitmap = new TransformedBitmap(bitmap, new ScaleTransform(scale, scale));
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(bitmap));
@@ -160,7 +160,7 @@ public sealed class FaviconCacheService
             var image = new BitmapImage();
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
-            image.DecodePixelWidth = 64;
+            image.DecodePixelWidth = 128;
             image.StreamSource = stream;
             image.EndInit();
             image.Freeze();
